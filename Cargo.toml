@@ -1,0 +1,6 @@
+[package]
+name = "loxscript"
+version = "0.1.0"
+authors = ["Yufeng Wang <yufengwang05@gmail.com>"]
+
+[dependencies]
