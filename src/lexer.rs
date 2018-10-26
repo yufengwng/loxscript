@@ -1,18 +1,19 @@
 use std::vec::Vec;
 
-use token::{Token, Kind};
+use token::Kind;
+use token::Token;
 
-struct Lexer {
+pub struct Lexer {
 }
 
 impl Lexer {
-    fn new() -> Lexer {
+    pub fn new() -> Lexer {
         Lexer {}
     }
 }
 
 impl Lexer {
-    fn scan(&self, src: &str) -> Vec<Token> {
+    pub fn scan(&self, src: &str) -> Vec<Token> {
         let mut tokens: Vec<Token> = Vec::new();
         let chars = src.chars().collect::<Vec<char>>();
         let end = chars.len();
@@ -148,14 +149,22 @@ impl Lexer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use token::Kind::*;
+
+    fn assert_tokens(src: &str, expected: &[Kind]) {
+        let lexer = Lexer::new();
+        let tokens = lexer.scan(src);
+        assert_eq!(expected.len(), tokens.len());
+        for i in 0..expected.len() {
+            assert_eq!(expected[i], tokens[i].kind);
+        }
+    }
 
     #[test]
     fn empty_source_has_eof_token() {
         let src = "";
-        let lexer = Lexer::new();
-        let tokens = lexer.scan(src);
-        assert_eq!(1, tokens.len());
-        assert_eq!(Kind::EOF, tokens[0].kind);
+        let expected = [EOF];
+        assert_tokens(src, &expected);
     }
 
     #[test]
@@ -170,10 +179,8 @@ mod tests {
     #[test]
     fn ignores_whitespace() {
         let src = " \t\r\n";
-        let lexer = Lexer::new();
-        let tokens = lexer.scan(src);
-        assert_eq!(1, tokens.len());
-        assert_eq!(Kind::EOF, tokens[0].kind);
+        let expected = [EOF];
+        assert_tokens(src, &expected);
     }
 
     #[test]
@@ -185,102 +192,98 @@ mod tests {
                    # abc\n\
                    # abc #\n\
                    ; #\n";
-        let lexer = Lexer::new();
-        let tokens = lexer.scan(src);
-        assert_eq!(2, tokens.len());
-        assert_eq!(Kind::Semi, tokens[0].kind);
-        assert_eq!(Kind::EOF, tokens[1].kind);
+        let expected = [Semi, EOF];
+        assert_tokens(src, &expected);
     }
 
     #[test]
     fn punctuation_tokens() {
         let src = "(){},;.";
-        let lexer = Lexer::new();
-        let tokens = lexer.scan(src);
-        assert_eq!(8, tokens.len());
-        assert_eq!(Kind::Lparen, tokens[0].kind);
-        assert_eq!(Kind::Rparen, tokens[1].kind);
-        assert_eq!(Kind::Lbrace, tokens[2].kind);
-        assert_eq!(Kind::Rbrace, tokens[3].kind);
-        assert_eq!(Kind::Comma, tokens[4].kind);
-        assert_eq!(Kind::Semi, tokens[5].kind);
-        assert_eq!(Kind::Dot, tokens[6].kind);
-        assert_eq!(Kind::EOF, tokens[7].kind);
+        let expected = [
+            Lparen, Rparen, Lbrace, Rbrace, Comma, Semi, Dot, EOF,
+        ];
+        assert_tokens(src, &expected);
     }
 
     #[test]
     fn operator_tokens() {
         let src = "+-*/% < <= > >= = == !=";
-        let lexer = Lexer::new();
-        let tokens = lexer.scan(src);
-        assert_eq!(13, tokens.len());
-        assert_eq!(Kind::Add, tokens[0].kind);
-        assert_eq!(Kind::Sub, tokens[1].kind);
-        assert_eq!(Kind::Mul, tokens[2].kind);
-        assert_eq!(Kind::Div, tokens[3].kind);
-        assert_eq!(Kind::Rem, tokens[4].kind);
-        assert_eq!(Kind::Lt, tokens[5].kind);
-        assert_eq!(Kind::LtEq, tokens[6].kind);
-        assert_eq!(Kind::Gt, tokens[7].kind);
-        assert_eq!(Kind::GtEq, tokens[8].kind);
-        assert_eq!(Kind::Eq, tokens[9].kind);
-        assert_eq!(Kind::EqEq, tokens[10].kind);
-        assert_eq!(Kind::NotEq, tokens[11].kind);
-        assert_eq!(Kind::EOF, tokens[12].kind);
+        let expected = [
+            Add, Sub, Mul, Div, Rem,
+            Lt, LtEq, Gt, GtEq,
+            Eq, EqEq, NotEq,
+            EOF,
+        ];
+        assert_tokens(src, &expected);
     }
 
     #[test]
     fn keyword_tokens() {
         let src = "and or not \
-                   if elif else for while break continue \
-                   fun let return \
-                   class self super";
-        let lexer = Lexer::new();
-        let tokens = lexer.scan(src);
-        assert_eq!(17, tokens.len());
-        assert_eq!(Kind::And, tokens[0].kind);
-        assert_eq!(Kind::Or, tokens[1].kind);
-        assert_eq!(Kind::Not, tokens[2].kind);
-        assert_eq!(Kind::If, tokens[3].kind);
-        assert_eq!(Kind::Elif, tokens[4].kind);
-        assert_eq!(Kind::Else, tokens[5].kind);
-        assert_eq!(Kind::For, tokens[6].kind);
-        assert_eq!(Kind::While, tokens[7].kind);
-        assert_eq!(Kind::Break, tokens[8].kind);
-        assert_eq!(Kind::Cont, tokens[9].kind);
-        assert_eq!(Kind::Fun, tokens[10].kind);
-        assert_eq!(Kind::Let, tokens[11].kind);
-        assert_eq!(Kind::Ret, tokens[12].kind);
-        assert_eq!(Kind::Class, tokens[13].kind);
-        assert_eq!(Kind::Selfie, tokens[14].kind);
-        assert_eq!(Kind::Super, tokens[15].kind);
-        assert_eq!(Kind::EOF, tokens[16].kind);
+                   if elif else \
+                   for while \
+                   break continue return \
+                   let fun class \
+                   self super";
+        let expected = [
+            And, Or, Not,
+            If, Elif, Else,
+            For, While,
+            Break, Cont, Ret,
+            Let, Fun, Class,
+            Selfie, Super,
+            EOF,
+        ];
+        assert_tokens(src, &expected);
     }
 
     #[test]
-    fn literal_tokens() {
-        let src = r#"none true false
-                     0 1 3 5.0 10.01
-                     "" "a" "abc"
-                     a _a ab a_b"#;
-        let lexer = Lexer::new();
-        let tokens = lexer.scan(src);
-        assert_eq!(16, tokens.len());
-        assert_eq!(Kind::None, tokens[0].kind);
-        assert_eq!(Kind::True, tokens[1].kind);
-        assert_eq!(Kind::False, tokens[2].kind);
-        assert_eq!(Kind::Num(0.), tokens[3].kind);
-        assert_eq!(Kind::Num(1.), tokens[4].kind);
-        assert_eq!(Kind::Num(3.), tokens[5].kind);
-        assert_eq!(Kind::Num(5.0), tokens[6].kind);
-        assert_eq!(Kind::Num(10.01), tokens[7].kind);
-        assert_eq!(Kind::Str("".to_owned()), tokens[8].kind);
-        assert_eq!(Kind::Str("a".to_owned()), tokens[9].kind);
-        assert_eq!(Kind::Str("abc".to_owned()), tokens[10].kind);
-        assert_eq!(Kind::Ident("a".to_owned()), tokens[11].kind);
-        assert_eq!(Kind::Ident("_a".to_owned()), tokens[12].kind);
-        assert_eq!(Kind::Ident("ab".to_owned()), tokens[13].kind);
-        assert_eq!(Kind::Ident("a_b".to_owned()), tokens[14].kind);
-        assert_eq!(Kind::EOF, tokens[15].kind);
+    fn literal_keyword_tokens() {
+        let src = "none true false";
+        let expected = [
+            None, True, False, EOF,
+        ];
+        assert_tokens(src, &expected);
+    }
+
+    #[test]
+    fn literal_number_tokens() {
+        let src = "0 1 3 5.0 10.01";
+        let expected = [
+            Num(0.0), Num(1.0), Num(3.0), Num(5.0), Num(10.01), EOF
+        ];
+        assert_tokens(src, &expected);
+    }
+
+    #[test]
+    fn literal_string_tokens() {
+        let src = r#" "" "a" "abc" "#;
+        let expected = [
+            Str("".to_owned()),
+            Str("a".to_owned()),
+            Str("abc".to_owned()),
+            EOF,
+        ];
+        assert_tokens(src, &expected);
+    }
+
+    #[test]
+    fn literal_identifier_tokens() {
+        let src = "_ __ _a a_ _a_ a_b a ab A Ab AB";
+        let expected = [
+            Ident("_".to_owned()),
+            Ident("__".to_owned()),
+            Ident("_a".to_owned()),
+            Ident("a_".to_owned()),
+            Ident("_a_".to_owned()),
+            Ident("a_b".to_owned()),
+            Ident("a".to_owned()),
+            Ident("ab".to_owned()),
+            Ident("A".to_owned()),
+            Ident("Ab".to_owned()),
+            Ident("AB".to_owned()),
+            EOF,
+        ];
+        assert_tokens(src, &expected);
     }
 }
