@@ -89,7 +89,7 @@ impl Lexer {
                         i = j;
                         Kind::EqEq
                     } else {
-                        Kind::Eq
+                        Kind::Eq_
                     }
                 },
 
@@ -211,7 +211,7 @@ mod tests {
         let expected = [
             Add, Sub, Mul, Div, Rem,
             Lt, LtEq, Gt, GtEq,
-            Eq, EqEq, NotEq,
+            Eq_, EqEq, NotEq,
             EOF,
         ];
         assert_tokens(src, &expected);
@@ -231,7 +231,7 @@ mod tests {
             For, While,
             Break, Cont, Ret,
             Let, Fun, Class,
-            Selfie, Super,
+            Self_, Super,
             EOF,
         ];
         assert_tokens(src, &expected);
@@ -241,7 +241,7 @@ mod tests {
     fn literal_keyword_tokens() {
         let src = "none true false";
         let expected = [
-            None, True, False, EOF,
+            None_, True, False, EOF,
         ];
         assert_tokens(src, &expected);
     }
