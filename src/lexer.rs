@@ -1,20 +1,20 @@
 use std::vec::Vec;
 
-use token::Kind;
+use token::Span;
 use token::Token;
 
 pub struct Lexer {
 }
 
 impl Lexer {
-    pub fn new() -> Lexer {
+    pub fn new() -> Self {
         Lexer {}
     }
 }
 
 impl Lexer {
-    pub fn scan(&self, src: &str) -> Vec<Token> {
-        let mut tokens: Vec<Token> = Vec::new();
+    pub fn scan(&self, src: &str) -> Vec<Span> {
+        let mut spans: Vec<Span> = Vec::new();
         let chars = src.chars().collect::<Vec<char>>();
         let end = chars.len();
 
@@ -22,14 +22,14 @@ impl Lexer {
         let mut i = 0;
         while i < end {
             let curr = chars[i];
-            let kind = match curr {
-                '(' => Kind::Lparen,
-                ')' => Kind::Rparen,
-                '{' => Kind::Lbrace,
-                '}' => Kind::Rbrace,
-                ',' => Kind::Comma,
-                ';' => Kind::Semi,
-                '.' => Kind::Dot,
+            let token = match curr {
+                '(' => Token::Lparen,
+                ')' => Token::Rparen,
+                '{' => Token::Lbrace,
+                '}' => Token::Rbrace,
+                ',' => Token::Comma,
+                ';' => Token::Semi,
+                '.' => Token::Dot,
 
                 ' ' | '\t' | '\r' => {
                     i += 1;
@@ -57,19 +57,19 @@ impl Lexer {
                     continue;
                 },
 
-                '+' => Kind::Add,
-                '-' => Kind::Sub,
-                '*' => Kind::Mul,
-                '/' => Kind::Div,
-                '%' => Kind::Rem,
+                '+' => Token::Add,
+                '-' => Token::Sub,
+                '*' => Token::Mul,
+                '/' => Token::Div,
+                '%' => Token::Rem,
 
                 '<' => {
                     let j = i + 1;
                     if j < end && chars[j] == '=' {
                         i = j;
-                        Kind::LtEq
+                        Token::LtEq
                     } else {
-                        Kind::Lt
+                        Token::Lt
                     }
                 },
 
@@ -77,9 +77,9 @@ impl Lexer {
                     let j = i + 1;
                     if j < end && chars[j] == '=' {
                         i = j;
-                        Kind::GtEq
+                        Token::GtEq
                     } else {
-                        Kind::Gt
+                        Token::Gt
                     }
                 },
 
@@ -87,9 +87,9 @@ impl Lexer {
                     let j = i + 1;
                     if j < end && chars[j] == '=' {
                         i = j;
-                        Kind::EqEq
+                        Token::EqEq
                     } else {
-                        Kind::Eq_
+                        Token::Eq_
                     }
                 },
 
@@ -97,7 +97,7 @@ impl Lexer {
                     let j = i + 1;
                     if j < end && chars[j] == '=' {
                         i = j;
-                        Kind::NotEq
+                        Token::NotEq
                     } else {
                         i = j;
                         continue;
@@ -111,7 +111,7 @@ impl Lexer {
                     }
                     let name = chars[i..j].iter().collect::<String>();
                     i = j - 1;
-                    Kind::to_keyword(&name).unwrap_or(Kind::Ident(name))
+                    Token::to_keyword(&name).unwrap_or(Token::Ident(name))
                 },
 
                 '0' ... '9' => {
@@ -122,7 +122,7 @@ impl Lexer {
                     let rep = chars[i..j].iter().collect::<String>();
                     let num = rep.parse::<f64>().unwrap();
                     i = j - 1;
-                    Kind::Num(num)
+                    Token::Num(num)
                 },
 
                 '"' => {
@@ -132,31 +132,31 @@ impl Lexer {
                     }
                     let inner = chars[i + 1 .. j].iter().collect::<String>();
                     i = j;
-                    Kind::Str(inner)
+                    Token::Str(inner)
                 },
 
-                _ => Kind::EOF,
+                _ => Token::EOF,
             };
-            tokens.push(Token::new(kind, line));
+            spans.push(Span::new(token, line));
             i += 1;
         }
 
-        tokens.push(Token::new(Kind::EOF, line));
-        tokens
+        spans.push(Span::new(Token::EOF, line));
+        spans
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use token::Kind::*;
+    use token::Token::*;
 
-    fn assert_tokens(src: &str, expected: &[Kind]) {
+    fn assert_tokens(src: &str, expected: &[Token]) {
         let lexer = Lexer::new();
-        let tokens = lexer.scan(src);
-        assert_eq!(expected.len(), tokens.len());
+        let spans = lexer.scan(src);
+        assert_eq!(expected.len(), spans.len());
         for i in 0..expected.len() {
-            assert_eq!(expected[i], tokens[i].kind);
+            assert_eq!(expected[i], spans[i].token);
         }
     }
 

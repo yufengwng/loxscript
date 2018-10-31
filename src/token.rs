@@ -1,17 +1,7 @@
-#[derive(Debug)]
-pub struct Token {
-    pub kind: Kind,
-    pub line: u64,
-}
-
-impl Token {
-    pub fn new(kind: Kind, line: u64) -> Token {
-        Token { kind, line }
-    }
-}
-
+/// The fundamental units of the language, where each token represents an atomic element of the
+/// language grammar.
 #[derive(Debug, PartialEq)]
-pub enum Kind {
+pub enum Token {
     // Punctuations.
     Lparen,
     Rparen,
@@ -61,33 +51,48 @@ pub enum Kind {
     Str(String),
     Ident(String),
 
-    // Special marker.
-    EOF
+    // End-of-file marker.
+    EOF,
 }
 
-impl Kind {
-    pub fn to_keyword(ident: &str) -> Option<Kind> {
+impl Token {
+    pub fn to_keyword(ident: &str) -> Option<Token> {
         Some(match ident {
-            "and" => Kind::And,
-            "or" => Kind::Or,
-            "not" => Kind::Not,
-            "if" => Kind::If,
-            "elif" => Kind::Elif,
-            "else" => Kind::Else,
-            "for" => Kind::For,
-            "while" => Kind::While,
-            "break" => Kind::Break,
-            "continue" => Kind::Cont,
-            "return" => Kind::Ret,
-            "let" => Kind::Let,
-            "fun" => Kind::Fun,
-            "class" => Kind::Class,
-            "self" => Kind::Self_,
-            "super" => Kind::Super,
-            "none" => Kind::None_,
-            "true" => Kind::True,
-            "false" => Kind::False,
+            "and" => Token::And,
+            "or" => Token::Or,
+            "not" => Token::Not,
+            "if" => Token::If,
+            "elif" => Token::Elif,
+            "else" => Token::Else,
+            "for" => Token::For,
+            "while" => Token::While,
+            "break" => Token::Break,
+            "continue" => Token::Cont,
+            "return" => Token::Ret,
+            "let" => Token::Let,
+            "fun" => Token::Fun,
+            "class" => Token::Class,
+            "self" => Token::Self_,
+            "super" => Token::Super,
+            "none" => Token::None_,
+            "true" => Token::True,
+            "false" => Token::False,
             _ => return None,
         })
+    }
+}
+
+/// Represents a token and metadata that maps it back to the source code, indicating its position
+/// and the "span" of source text it comes from. Thinking of source code as a series of lines, a
+/// line is then composed of a series of "spans".
+#[derive(Debug)]
+pub struct Span {
+    pub token: Token,
+    pub line: u64,
+}
+
+impl Span {
+    pub fn new(token: Token, line: u64) -> Self {
+        Span { token, line }
     }
 }
