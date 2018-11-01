@@ -3,16 +3,13 @@ use std::vec::Vec;
 use token::Span;
 use token::Token;
 
-pub struct Lexer {
-}
+pub struct Lexer;
 
 impl Lexer {
     pub fn new() -> Self {
         Lexer {}
     }
-}
 
-impl Lexer {
     pub fn scan(&self, src: &str) -> Vec<Span> {
         let mut spans: Vec<Span> = Vec::new();
         let chars = src.chars().collect::<Vec<char>>();
@@ -34,12 +31,12 @@ impl Lexer {
                 ' ' | '\t' | '\r' => {
                     i += 1;
                     continue;
-                },
+                }
                 '\n' => {
                     line += 1;
                     i += 1;
                     continue;
-                },
+                }
 
                 '#' => {
                     let mut j = i + 1;
@@ -55,7 +52,7 @@ impl Lexer {
                     }
                     i = j + 1;
                     continue;
-                },
+                }
 
                 '+' => Token::Add,
                 '-' => Token::Sub,
@@ -71,7 +68,7 @@ impl Lexer {
                     } else {
                         Token::Lt
                     }
-                },
+                }
 
                 '>' => {
                     let j = i + 1;
@@ -81,7 +78,7 @@ impl Lexer {
                     } else {
                         Token::Gt
                     }
-                },
+                }
 
                 '=' => {
                     let j = i + 1;
@@ -91,7 +88,7 @@ impl Lexer {
                     } else {
                         Token::Eq_
                     }
-                },
+                }
 
                 '!' => {
                     let j = i + 1;
@@ -102,9 +99,9 @@ impl Lexer {
                         i = j;
                         continue;
                     }
-                },
+                }
 
-                'a' ... 'z' | 'A' ... 'Z' | '_' => {
+                'a'...'z' | 'A'...'Z' | '_' => {
                     let mut j = i + 1;
                     while j < end && (chars[j] == '_' || chars[j].is_ascii_alphanumeric()) {
                         j += 1;
@@ -112,9 +109,9 @@ impl Lexer {
                     let name = chars[i..j].iter().collect::<String>();
                     i = j - 1;
                     Token::to_keyword(&name).unwrap_or(Token::Ident(name))
-                },
+                }
 
-                '0' ... '9' => {
+                '0'...'9' => {
                     let mut j = i + 1;
                     while j < end && (chars[j] == '.' || chars[j].is_ascii_digit()) {
                         j += 1;
@@ -123,17 +120,17 @@ impl Lexer {
                     let num = rep.parse::<f64>().unwrap();
                     i = j - 1;
                     Token::Num(num)
-                },
+                }
 
                 '"' => {
                     let mut j = i + 1;
                     while j < end && chars[j] != '"' {
                         j += 1;
                     }
-                    let inner = chars[i + 1 .. j].iter().collect::<String>();
+                    let inner = chars[i + 1..j].iter().collect::<String>();
                     i = j;
                     Token::Str(inner)
-                },
+                }
 
                 _ => Token::EOF,
             };
@@ -171,9 +168,9 @@ mod tests {
     fn lines_start_at_one() {
         let src = "";
         let lexer = Lexer::new();
-        let tokens = lexer.scan(src);
-        assert_eq!(1, tokens.len());
-        assert_eq!(1, tokens[0].line);
+        let spans = lexer.scan(src);
+        assert_eq!(1, spans.len());
+        assert_eq!(1, spans[0].line);
     }
 
     #[test]
@@ -199,9 +196,7 @@ mod tests {
     #[test]
     fn punctuation_tokens() {
         let src = "(){},;.";
-        let expected = [
-            Lparen, Rparen, Lbrace, Rbrace, Comma, Semi, Dot, EOF,
-        ];
+        let expected = [Lparen, Rparen, Lbrace, Rbrace, Comma, Semi, Dot, EOF];
         assert_tokens(src, &expected);
     }
 
@@ -209,10 +204,7 @@ mod tests {
     fn operator_tokens() {
         let src = "+-*/% < <= > >= = == !=";
         let expected = [
-            Add, Sub, Mul, Div, Rem,
-            Lt, LtEq, Gt, GtEq,
-            Eq_, EqEq, NotEq,
-            EOF,
+            Add, Sub, Mul, Div, Rem, Lt, LtEq, Gt, GtEq, Eq_, EqEq, NotEq, EOF,
         ];
         assert_tokens(src, &expected);
     }
@@ -221,18 +213,12 @@ mod tests {
     fn keyword_tokens() {
         let src = "and or not \
                    if elif else \
-                   for while \
-                   break continue return \
+                   for while break continue return \
                    let fun class \
                    self super";
         let expected = [
-            And, Or, Not,
-            If, Elif, Else,
-            For, While,
-            Break, Cont, Ret,
-            Let, Fun, Class,
-            Self_, Super,
-            EOF,
+            And, Or, Not, If, Elif, Else, For, While, Break, Cont, Ret, Let, Fun, Class, Self_,
+            Super, EOF,
         ];
         assert_tokens(src, &expected);
     }
@@ -240,18 +226,14 @@ mod tests {
     #[test]
     fn literal_keyword_tokens() {
         let src = "none true false";
-        let expected = [
-            None_, True, False, EOF,
-        ];
+        let expected = [None_, True, False, EOF];
         assert_tokens(src, &expected);
     }
 
     #[test]
     fn literal_number_tokens() {
         let src = "0 1 3 5.0 10.01";
-        let expected = [
-            Num(0.0), Num(1.0), Num(3.0), Num(5.0), Num(10.01), EOF
-        ];
+        let expected = [Num(0.0), Num(1.0), Num(3.0), Num(5.0), Num(10.01), EOF];
         assert_tokens(src, &expected);
     }
 

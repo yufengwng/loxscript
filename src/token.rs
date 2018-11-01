@@ -1,5 +1,7 @@
-/// The fundamental units of the language, where each token represents an atomic element of the
-/// language grammar.
+/// The fundamental units of the language.
+///
+/// Each token represents an atomic element of the language grammar. A few literal tokens also
+/// contain the value it represents.
 #[derive(Debug, PartialEq)]
 pub enum Token {
     // Punctuations.
@@ -82,6 +84,8 @@ impl Token {
     }
 }
 
+/// A region of the source code.
+///
 /// Represents a token and metadata that maps it back to the source code, indicating its position
 /// and the "span" of source text it comes from. Thinking of source code as a series of lines, a
 /// line is then composed of a series of "spans".
