@@ -1,3 +1,5 @@
+//! Module for syntactic elements.
+
 /// The fundamental units of the language.
 ///
 /// Each token represents an atomic element of the language grammar. A few literal tokens also
@@ -14,11 +16,11 @@ pub enum Token {
     Dot,
 
     // Operators.
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Rem,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Percent,
     Lt,
     LtEq,
     Gt,

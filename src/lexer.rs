@@ -54,11 +54,11 @@ impl Lexer {
                     continue;
                 }
 
-                '+' => Token::Add,
-                '-' => Token::Sub,
-                '*' => Token::Mul,
-                '/' => Token::Div,
-                '%' => Token::Rem,
+                '+' => Token::Plus,
+                '-' => Token::Minus,
+                '*' => Token::Star,
+                '/' => Token::Slash,
+                '%' => Token::Percent,
 
                 '<' => {
                     let j = i + 1;
@@ -204,7 +204,7 @@ mod tests {
     fn operator_tokens() {
         let src = "+-*/% < <= > >= = == !=";
         let expected = [
-            Add, Sub, Mul, Div, Rem, Lt, LtEq, Gt, GtEq, Eq_, EqEq, NotEq, EOF,
+            Plus, Minus, Star, Slash, Percent, Lt, LtEq, Gt, GtEq, Eq_, EqEq, NotEq, EOF,
         ];
         assert_tokens(src, &expected);
     }
