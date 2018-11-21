@@ -99,7 +99,7 @@ pub struct Span {
 
 impl Span {
     pub fn new(token: Token, line: usize) -> Self {
-        Span { token, line }
+        Self { token, line }
     }
 }
 
@@ -150,11 +150,23 @@ mod tests {
     #[test]
     fn token_ident_equality() {
         assert!(Token::Ident(String::from("")) == Token::Ident(String::from("")));
-        assert_eq!(Token::Ident(String::from("")), Token::Ident(String::from("")));
-        assert_eq!(Token::Ident(String::from("a")), Token::Ident(String::from("a")));
+        assert_eq!(
+            Token::Ident(String::from("")),
+            Token::Ident(String::from(""))
+        );
+        assert_eq!(
+            Token::Ident(String::from("a")),
+            Token::Ident(String::from("a"))
+        );
 
         assert!(Token::Ident(String::from("")) != Token::Ident(String::from("a")));
-        assert_ne!(Token::Ident(String::from("")), Token::Ident(String::from("a")));
-        assert_ne!(Token::Ident(String::from("a")), Token::Ident(String::from("b")));
+        assert_ne!(
+            Token::Ident(String::from("")),
+            Token::Ident(String::from("a"))
+        );
+        assert_ne!(
+            Token::Ident(String::from("a")),
+            Token::Ident(String::from("b"))
+        );
     }
 }

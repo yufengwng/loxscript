@@ -7,7 +7,7 @@ pub struct Lexer;
 
 impl Lexer {
     pub fn new() -> Self {
-        Lexer {}
+        Self {}
     }
 
     pub fn scan(&self, src: &str) -> Vec<Span> {

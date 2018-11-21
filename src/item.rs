@@ -2,25 +2,32 @@
 
 use token::Span;
 
+#[derive(Debug)]
 pub enum BinOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Rem,
-    Lt,
-    LtEq,
-    Gt,
-    GtEq,
-    Eq_,
-    EqEq,
-    NotEq,
+    Add(Span),
+    Sub(Span),
+    Mul(Span),
+    Div(Span),
+    Rem(Span),
+    Lt(Span),
+    LtEq(Span),
+    Gt(Span),
+    GtEq(Span),
+    EqEq(Span),
+    NotEq(Span),
+}
+
+#[derive(Debug)]
+pub enum UniOp {
+    Neg(Span),
+    Not(Span),
 }
 
 /// Mostly language items that evaluate to values.
 pub enum Expr {
-    // Binary(Box<Expr>, BinOp, Box<Expr>),
+    Binary(Box<Expr>, BinOp, Box<Expr>),
     Literal(Span),
+    Unary(UniOp, Box<Expr>),
 }
 
 /// Mostly language items for control flow.

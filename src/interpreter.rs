@@ -1,7 +1,4 @@
-use std::io::{self, Write};
-
 use item::{Decl, Expr, Stmt};
-use token::Token;
 
 pub struct Interpreter;
 
@@ -14,22 +11,25 @@ impl Interpreter {
         for decl in program {
             match decl {
                 Decl::Statement(ref stmt) => match stmt {
-                    Stmt::Expression(ref expr) => match expr {
-                        Expr::Literal(ref span) => {
-                            println!("{:?}", span.token);
-                            match span.token {
-                                Token::None_ => println!("none"),
-                                Token::True => println!("true"),
-                                Token::False => println!("false"),
-                                Token::Num(n) => println!("{}", n),
-                                Token::Str(ref s) => println!("{}", s),
-                                Token::Ident(ref name) => println!("{}", name),
-                                _ => {}
-                            }
-                            io::stdout().flush().unwrap();
-                        }
-                    },
+                    Stmt::Expression(ref expr) => self.eval(expr),
                 },
+            }
+        }
+    }
+
+    fn eval(&self, expr: &Expr) {
+        match expr {
+            Expr::Literal(ref span) => {
+                println!("{:?}", span);
+            }
+            Expr::Unary(ref op, expr) => {
+                println!("{:?}", op);
+                self.eval(expr);
+            }
+            Expr::Binary(ref lhs, ref op, ref rhs) => {
+                self.eval(lhs);
+                println!("{:?}", op);
+                self.eval(rhs);
             }
         }
     }
