@@ -6,7 +6,9 @@ declaration : statement ;
 
 statement   : expression ';' ;
 
-expression  : equality;
+expression  : logical_or ;
+logical_or  : logical_and ( 'or' logical_and )* ;
+logical_and : equality ( 'and' equality )* ;
 equality    : comparison ( ( '==' | '!=' ) comparison )* ;
 comparison  : addition ( ( '<' | '<=' | '>' | '>=' ) addition )* ;
 addition    : multiply ( ( '+' | '-' ) multiply )* ;

@@ -31,6 +31,11 @@ impl Interpreter {
                 println!("{:?}", op);
                 self.eval(rhs);
             }
+            Expr::Logical(ref lhs, ref op, ref rhs) => {
+                self.eval(lhs);
+                println!("{:?}", op);
+                self.eval(rhs);
+            }
         }
     }
 }

@@ -18,6 +18,12 @@ pub enum BinOp {
 }
 
 #[derive(Debug)]
+pub enum LogOp {
+    And(Span),
+    Or(Span),
+}
+
+#[derive(Debug)]
 pub enum UniOp {
     Neg(Span),
     Not(Span),
@@ -25,9 +31,10 @@ pub enum UniOp {
 
 /// Mostly language items that evaluate to values.
 pub enum Expr {
+    Logical(Box<Expr>, LogOp, Box<Expr>),
     Binary(Box<Expr>, BinOp, Box<Expr>),
-    Literal(Span),
     Unary(UniOp, Box<Expr>),
+    Literal(Span),
 }
 
 /// Mostly language items for control flow.

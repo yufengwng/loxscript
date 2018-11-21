@@ -1,4 +1,5 @@
-use item::{BinOp, Decl, Expr, Stmt, UniOp};
+use item::{Decl, Expr, Stmt};
+use item::{BinOp, LogOp, UniOp};
 use token::{Span, Token};
 
 pub struct Parser {
@@ -64,7 +65,41 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Option<Expr> {
-        self.equality()
+        self.logical_or()
+    }
+
+    fn logical_or(&mut self) -> Option<Expr> {
+        let mut expr = match self.logical_and() {
+            Some(e) => e,
+            None => return None,
+        };
+
+        while let Some(curr) = self.matches(&Token::Or) {
+            let right = match self.logical_and() {
+                Some(e) => e,
+                None => return None,
+            };
+            expr = Expr::Logical(Box::new(expr), LogOp::Or(curr), Box::new(right));
+        }
+
+        Some(expr)
+    }
+
+    fn logical_and(&mut self) -> Option<Expr> {
+        let mut expr = match self.equality() {
+            Some(e) => e,
+            None => return None,
+        };
+
+        while let Some(curr) = self.matches(&Token::And) {
+            let right = match self.equality() {
+                Some(e) => e,
+                None => return None,
+            };
+            expr = Expr::Logical(Box::new(expr), LogOp::And(curr), Box::new(right));
+        }
+
+        Some(expr)
     }
 
     fn equality(&mut self) -> Option<Expr> {
