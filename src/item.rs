@@ -1,48 +1,54 @@
 //! Module for higher-level syntactic language items.
 
-use token::Span;
-
 #[derive(Debug)]
-pub enum BinOp {
-    Add(Span),
-    Sub(Span),
-    Mul(Span),
-    Div(Span),
-    Rem(Span),
-    Lt(Span),
-    LtEq(Span),
-    Gt(Span),
-    GtEq(Span),
-    EqEq(Span),
-    NotEq(Span),
+pub enum LogOp {
+    And(usize),
+    Or(usize),
 }
 
 #[derive(Debug)]
-pub enum LogOp {
-    And(Span),
-    Or(Span),
+pub enum BinOp {
+    Add(usize),
+    Sub(usize),
+    Mul(usize),
+    Div(usize),
+    Rem(usize),
+    Lt(usize),
+    LtEq(usize),
+    Gt(usize),
+    GtEq(usize),
+    EqEq(usize),
+    NotEq(usize),
 }
 
 #[derive(Debug)]
 pub enum UniOp {
-    Neg(Span),
-    Not(Span),
+    Neg(usize),
+    Not(usize),
 }
 
-/// Mostly language items that evaluate to values.
+#[derive(Debug)]
+pub enum Primitive {
+    None(usize),
+    Bool(bool, usize),
+    Num(f64, usize),
+    Str(String, usize),
+}
+
+/// Language items that evaluate to values.
 pub enum Expr {
     Logical(Box<Expr>, LogOp, Box<Expr>),
     Binary(Box<Expr>, BinOp, Box<Expr>),
     Unary(UniOp, Box<Expr>),
-    Literal(Span),
+    Literal(Primitive),
 }
 
-/// Mostly language items for control flow.
+/// Language items for control flow or side effects.
 pub enum Stmt {
     Expression(Expr),
 }
 
-/// Mostly language items that introduce name bindings.
+/// Language items that introduce name bindings.
 pub enum Decl {
     Statement(Stmt),
 }

@@ -1,5 +1,3 @@
-use std::vec::Vec;
-
 use token::Span;
 use token::Token;
 
@@ -86,7 +84,7 @@ impl Lexer {
                         i = j;
                         Token::EqEq
                     } else {
-                        Token::Eq_
+                        Token::Eq
                     }
                 }
 
@@ -204,7 +202,7 @@ mod tests {
     fn operator_tokens() {
         let src = "+-*/% < <= > >= = == !=";
         let expected = [
-            Plus, Minus, Star, Slash, Percent, Lt, LtEq, Gt, GtEq, Eq_, EqEq, NotEq, EOF,
+            Plus, Minus, Star, Slash, Percent, Lt, LtEq, Gt, GtEq, Eq, EqEq, NotEq, EOF,
         ];
         assert_tokens(src, &expected);
     }
@@ -226,7 +224,7 @@ mod tests {
     #[test]
     fn literal_keyword_tokens() {
         let src = "none true false";
-        let expected = [None_, True, False, EOF];
+        let expected = [None, True, False, EOF];
         assert_tokens(src, &expected);
     }
 

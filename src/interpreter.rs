@@ -19,8 +19,8 @@ impl Interpreter {
 
     fn eval(&self, expr: &Expr) {
         match expr {
-            Expr::Literal(ref span) => {
-                println!("{:?}", span);
+            Expr::Literal(ref prim) => {
+                println!("{:?}", prim);
             }
             Expr::Unary(ref op, expr) => {
                 println!("{:?}", op);

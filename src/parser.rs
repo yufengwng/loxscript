@@ -1,15 +1,15 @@
-use item::{Decl, Expr, Stmt};
 use item::{BinOp, LogOp, UniOp};
+use item::{Decl, Expr, Primitive, Stmt};
 use token::{Span, Token};
 
 pub struct Parser {
     spans: Vec<Span>,
-    pos: usize,
+    idx: usize,
 }
 
 impl Parser {
     pub fn new(spans: Vec<Span>) -> Self {
-        Self { spans, pos: 0 }
+        Self { spans, idx: 0 }
     }
 
     pub fn parse(&mut self) -> Vec<Decl> {
@@ -26,34 +26,124 @@ impl Parser {
     }
 
     fn is_at_end(&self) -> bool {
-        self.pos >= self.spans.len() || self.spans[self.pos].token == Token::EOF
+        self.idx >= self.spans.len() || self.spans[self.idx].token == Token::EOF
     }
 
-    fn advance(&mut self) -> Span {
-        let curr = self.spans[self.pos].clone();
-        self.pos += 1;
+    fn advance(&mut self) -> &Span {
+        let curr = &self.spans[self.idx];
+        self.idx += 1;
         curr
     }
 
-    fn matches(&mut self, token: &Token) -> Option<Span> {
+    fn consume_unary_op(&mut self) -> Option<UniOp> {
         if self.is_at_end() {
             return None;
         }
 
-        if self.spans[self.pos].token == *token {
-            Some(self.advance())
+        let curr = &self.spans[self.idx];
+        let op = match curr.token {
+            Token::Minus => UniOp::Neg(curr.line),
+            Token::Not => UniOp::Not(curr.line),
+            _ => return None,
+        };
+
+        self.idx += 1;
+        Some(op)
+    }
+
+    fn consume_multiplicative_op(&mut self) -> Option<BinOp> {
+        if self.is_at_end() {
+            return None;
+        }
+
+        let curr = &self.spans[self.idx];
+        let op = match &curr.token {
+            Token::Star => BinOp::Mul(curr.line),
+            Token::Slash => BinOp::Div(curr.line),
+            Token::Percent => BinOp::Rem(curr.line),
+            _ => return None,
+        };
+
+        self.idx += 1;
+        Some(op)
+    }
+
+    fn consume_additive_op(&mut self) -> Option<BinOp> {
+        if self.is_at_end() {
+            return None;
+        }
+
+        let curr = &self.spans[self.idx];
+        let op = match &curr.token {
+            Token::Plus => BinOp::Add(curr.line),
+            Token::Minus => BinOp::Sub(curr.line),
+            _ => return None,
+        };
+
+        self.idx += 1;
+        Some(op)
+    }
+
+    fn consume_compare_op(&mut self) -> Option<BinOp> {
+        if self.is_at_end() {
+            return None;
+        }
+
+        let curr = &self.spans[self.idx];
+        let op = match &curr.token {
+            Token::Lt => BinOp::Lt(curr.line),
+            Token::LtEq => BinOp::LtEq(curr.line),
+            Token::Gt => BinOp::Gt(curr.line),
+            Token::GtEq => BinOp::GtEq(curr.line),
+            _ => return None,
+        };
+
+        self.idx += 1;
+        Some(op)
+    }
+
+    fn consume_equality_op(&mut self) -> Option<BinOp> {
+        if self.is_at_end() {
+            return None;
+        }
+
+        let curr = &self.spans[self.idx];
+        let op = match &curr.token {
+            Token::EqEq => BinOp::EqEq(curr.line),
+            Token::NotEq => BinOp::NotEq(curr.line),
+            _ => return None,
+        };
+
+        self.idx += 1;
+        Some(op)
+    }
+
+    fn consume_and_op(&mut self) -> Option<LogOp> {
+        if self.is_at_end() {
+            return None;
+        }
+
+        let curr = &self.spans[self.idx];
+        if curr.token == Token::And {
+            self.idx += 1;
+            Some(LogOp::And(curr.line))
         } else {
             None
         }
     }
 
-    fn matches_any(&mut self, tokens: &[Token]) -> Option<Span> {
-        for token in tokens {
-            if let Some(span) = self.matches(token) {
-                return Some(span);
-            }
+    fn consume_or_op(&mut self) -> Option<LogOp> {
+        if self.is_at_end() {
+            return None;
         }
-        None
+
+        let curr = &self.spans[self.idx];
+        if curr.token == Token::Or {
+            self.idx += 1;
+            Some(LogOp::Or(curr.line))
+        } else {
+            None
+        }
     }
 
     fn declaration(&mut self) -> Option<Decl> {
@@ -74,12 +164,12 @@ impl Parser {
             None => return None,
         };
 
-        while let Some(curr) = self.matches(&Token::Or) {
-            let right = match self.logical_and() {
+        while let Some(op) = self.consume_or_op() {
+            let rhs = match self.logical_and() {
                 Some(e) => e,
                 None => return None,
             };
-            expr = Expr::Logical(Box::new(expr), LogOp::Or(curr), Box::new(right));
+            expr = Expr::Logical(Box::new(expr), op, Box::new(rhs));
         }
 
         Some(expr)
@@ -91,12 +181,12 @@ impl Parser {
             None => return None,
         };
 
-        while let Some(curr) = self.matches(&Token::And) {
-            let right = match self.equality() {
+        while let Some(op) = self.consume_and_op() {
+            let rhs = match self.equality() {
                 Some(e) => e,
                 None => return None,
             };
-            expr = Expr::Logical(Box::new(expr), LogOp::And(curr), Box::new(right));
+            expr = Expr::Logical(Box::new(expr), op, Box::new(rhs));
         }
 
         Some(expr)
@@ -108,17 +198,12 @@ impl Parser {
             None => return None,
         };
 
-        while let Some(curr) = self.matches_any(&[Token::EqEq, Token::NotEq]) {
-            let right = match self.comparison() {
+        while let Some(op) = self.consume_equality_op() {
+            let rhs = match self.comparison() {
                 Some(e) => e,
                 None => return None,
             };
-            let op = match curr.token {
-                Token::EqEq => BinOp::EqEq(curr),
-                Token::NotEq => BinOp::NotEq(curr),
-                _ => return None,
-            };
-            expr = Expr::Binary(Box::new(expr), op, Box::new(right));
+            expr = Expr::Binary(Box::new(expr), op, Box::new(rhs));
         }
 
         Some(expr)
@@ -130,19 +215,12 @@ impl Parser {
             None => return None,
         };
 
-        while let Some(curr) = self.matches_any(&[Token::Lt, Token::LtEq, Token::Gt, Token::GtEq]) {
-            let right = match self.addition() {
+        while let Some(op) = self.consume_compare_op() {
+            let rhs = match self.addition() {
                 Some(e) => e,
                 None => return None,
             };
-            let op = match curr.token {
-                Token::Lt => BinOp::Lt(curr),
-                Token::LtEq => BinOp::LtEq(curr),
-                Token::Gt => BinOp::Gt(curr),
-                Token::GtEq => BinOp::GtEq(curr),
-                _ => return None,
-            };
-            expr = Expr::Binary(Box::new(expr), op, Box::new(right));
+            expr = Expr::Binary(Box::new(expr), op, Box::new(rhs));
         }
 
         Some(expr)
@@ -154,17 +232,12 @@ impl Parser {
             None => return None,
         };
 
-        while let Some(curr) = self.matches_any(&[Token::Plus, Token::Minus]) {
-            let right = match self.multiply() {
+        while let Some(op) = self.consume_additive_op() {
+            let rhs = match self.multiply() {
                 Some(e) => e,
                 None => return None,
             };
-            let op = match curr.token {
-                Token::Plus => BinOp::Add(curr),
-                Token::Minus => BinOp::Sub(curr),
-                _ => return None,
-            };
-            expr = Expr::Binary(Box::new(expr), op, Box::new(right));
+            expr = Expr::Binary(Box::new(expr), op, Box::new(rhs));
         }
 
         Some(expr)
@@ -176,35 +249,24 @@ impl Parser {
             None => return None,
         };
 
-        while let Some(curr) = self.matches_any(&[Token::Star, Token::Slash, Token::Percent]) {
-            let right = match self.unary() {
+        while let Some(op) = self.consume_multiplicative_op() {
+            let rhs = match self.unary() {
                 Some(e) => e,
                 None => return None,
             };
-            let op = match curr.token {
-                Token::Star => BinOp::Mul(curr),
-                Token::Slash => BinOp::Div(curr),
-                Token::Percent => BinOp::Rem(curr),
-                _ => return None,
-            };
-            expr = Expr::Binary(Box::new(expr), op, Box::new(right));
+            expr = Expr::Binary(Box::new(expr), op, Box::new(rhs));
         }
 
         Some(expr)
     }
 
     fn unary(&mut self) -> Option<Expr> {
-        if let Some(curr) = self.matches_any(&[Token::Minus, Token::Not]) {
-            let right = match self.unary() {
+        if let Some(op) = self.consume_unary_op() {
+            let rhs = match self.unary() {
                 Some(e) => e,
                 None => return None,
             };
-            let op = match curr.token {
-                Token::Minus => UniOp::Neg(curr),
-                Token::Not => UniOp::Not(curr),
-                _ => return None,
-            };
-            return Some(Expr::Unary(op, Box::new(right)));
+            return Some(Expr::Unary(op, Box::new(rhs)));
         }
 
         self.primary()
@@ -213,9 +275,12 @@ impl Parser {
     fn primary(&mut self) -> Option<Expr> {
         let curr = self.advance();
 
-        let expr = match curr.token {
-            Token::None_ | Token::True | Token::False => Expr::Literal(curr),
-            Token::Num(_) | Token::Str(_) | Token::Ident(_) => Expr::Literal(curr),
+        let expr = match &curr.token {
+            Token::None => Expr::Literal(Primitive::None(curr.line)),
+            Token::True => Expr::Literal(Primitive::Bool(true, curr.line)),
+            Token::False => Expr::Literal(Primitive::Bool(false, curr.line)),
+            Token::Num(n) => Expr::Literal(Primitive::Num(n.clone(), curr.line)),
+            Token::Str(s) => Expr::Literal(Primitive::Str(s.clone(), curr.line)),
             _ => return None,
         };
 
@@ -229,7 +294,7 @@ mod tests {
 
     #[test]
     fn parse_literal_expression_statement() {
-        let spans = [Token::None_, Token::True, Token::False, Token::EOF]
+        let spans = [Token::None, Token::True, Token::False, Token::EOF]
             .iter()
             .map(|t| Span::new(t.clone(), 1))
             .collect::<Vec<_>>();

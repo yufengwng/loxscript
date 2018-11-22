@@ -1,9 +1,9 @@
-//! Module for syntactic elements.
+//! Module for source-level syntactic elements.
 
 /// The fundamental units of the language.
 ///
-/// Each token represents an atomic element of the language grammar. A few literal tokens also
-/// contain the value it represents.
+/// Each token represents an atomic element of the language grammar. A few of the literal tokens
+/// also contains the value it represents.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
     // Punctuations.
@@ -25,7 +25,7 @@ pub enum Token {
     LtEq,
     Gt,
     GtEq,
-    Eq_,
+    Eq,
     EqEq,
     NotEq,
 
@@ -48,7 +48,7 @@ pub enum Token {
     Super,
 
     // Literals.
-    None_,
+    None,
     True,
     False,
     Num(f64),
@@ -78,7 +78,7 @@ impl Token {
             "class" => Token::Class,
             "self" => Token::Self_,
             "super" => Token::Super,
-            "none" => Token::None_,
+            "none" => Token::None,
             "true" => Token::True,
             "false" => Token::False,
             _ => return None,
@@ -88,9 +88,8 @@ impl Token {
 
 /// A region of the source code.
 ///
-/// Represents a token and metadata that maps it back to the source code, indicating its position
-/// and the "span" of source text it comes from. Thinking of source code as a series of lines, a
-/// line is then composed of a series of "spans".
+/// Represents a token and metadata that loosely maps it back to the source code. Thinking of
+/// source code as a series of lines, a line is then composed of a series of "spans".
 #[derive(Clone, Debug)]
 pub struct Span {
     pub token: Token,
