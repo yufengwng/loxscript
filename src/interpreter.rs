@@ -1,6 +1,7 @@
-use item::{BinOp, Decl, Expr, LogOp, Primitive, Stmt, UniOp};
-use runtime::Value;
+use crate::item::{BinOp, Decl, Expr, LogOp, Primitive, Stmt, UniOp};
+use crate::runtime::Value;
 
+#[derive(Default)]
 pub struct Interpreter;
 
 impl Interpreter {
@@ -28,8 +29,8 @@ impl Interpreter {
         match expr {
             Expr::Literal(ref prim) => match prim {
                 Primitive::None(_) => Value::None,
-                Primitive::Bool(b, _) => Value::Bool(b.clone()),
-                Primitive::Num(n, _) => Value::Num(n.clone()),
+                Primitive::Bool(b, _) => Value::Bool(*b),
+                Primitive::Num(n, _) => Value::Num(*n),
                 Primitive::Str(s, _) => Value::Str(s.clone()),
             },
             Expr::Unary(ref op, expr) => {
@@ -93,16 +94,20 @@ impl Interpreter {
             Expr::Logical(ref lhs, ref op, ref rhs) => {
                 let lval = self.eval(lhs);
                 match op {
-                    LogOp::And(_) => if lval.is_truthy() {
-                        self.eval(rhs)
-                    } else {
-                        lval
-                    },
-                    LogOp::Or(_) => if lval.is_truthy() {
-                        lval
-                    } else {
-                        self.eval(rhs)
-                    },
+                    LogOp::And(_) => {
+                        if lval.is_truthy() {
+                            self.eval(rhs)
+                        } else {
+                            lval
+                        }
+                    }
+                    LogOp::Or(_) => {
+                        if lval.is_truthy() {
+                            lval
+                        } else {
+                            self.eval(rhs)
+                        }
+                    }
                 }
             }
         }

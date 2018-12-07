@@ -1,6 +1,7 @@
-use token::Span;
-use token::Token;
+use crate::token::Span;
+use crate::token::Token;
 
+#[derive(Default)]
 pub struct Lexer;
 
 impl Lexer {
@@ -106,7 +107,7 @@ impl Lexer {
                     }
                     let name = chars[i..j].iter().collect::<String>();
                     i = j - 1;
-                    Token::to_keyword(&name).unwrap_or(Token::Ident(name))
+                    Token::get_keyword(&name).unwrap_or_else(|| Token::Ident(name))
                 }
 
                 '0'...'9' => {
@@ -144,7 +145,7 @@ impl Lexer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use token::Token::*;
+    use crate::token::Token::*;
 
     fn assert_tokens(src: &str, expected: &[Token]) {
         let lexer = Lexer::new();

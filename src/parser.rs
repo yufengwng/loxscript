@@ -1,6 +1,6 @@
-use item::{BinOp, LogOp, UniOp};
-use item::{Decl, Expr, Primitive, Stmt};
-use token::{Span, Token};
+use crate::item::{BinOp, LogOp, UniOp};
+use crate::item::{Decl, Expr, Primitive, Stmt};
+use crate::token::{Span, Token};
 
 pub struct Parser {
     spans: Vec<Span>,
@@ -16,9 +16,8 @@ impl Parser {
         let mut decls = Vec::new();
 
         while !self.is_at_end() {
-            match self.declaration() {
-                Some(decl) => decls.push(decl),
-                None => {}
+            if let Some(decl) = self.declaration() {
+                decls.push(decl);
             }
         }
 
@@ -147,11 +146,11 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Option<Decl> {
-        self.statement().map(|s| Decl::Statement(s))
+        self.statement().map(Decl::Statement)
     }
 
     fn statement(&mut self) -> Option<Stmt> {
-        self.expression().map(|e| Stmt::Expression(e))
+        self.expression().map(Stmt::Expression)
     }
 
     fn expression(&mut self) -> Option<Expr> {
@@ -279,7 +278,7 @@ impl Parser {
             Token::None => Expr::Literal(Primitive::None(curr.line)),
             Token::True => Expr::Literal(Primitive::Bool(true, curr.line)),
             Token::False => Expr::Literal(Primitive::Bool(false, curr.line)),
-            Token::Num(n) => Expr::Literal(Primitive::Num(n.clone(), curr.line)),
+            Token::Num(n) => Expr::Literal(Primitive::Num(*n, curr.line)),
             Token::Str(s) => Expr::Literal(Primitive::Str(s.clone(), curr.line)),
             _ => return None,
         };

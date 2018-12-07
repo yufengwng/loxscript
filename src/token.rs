@@ -60,7 +60,7 @@ pub enum Token {
 }
 
 impl Token {
-    pub fn to_keyword(ident: &str) -> Option<Token> {
+    pub fn get_keyword(ident: &str) -> Option<Token> {
         Some(match ident {
             "and" => Token::And,
             "or" => Token::Or,
