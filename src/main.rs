@@ -1,5 +1,3 @@
-extern crate loxscript;
-
 use std::io;
 use std::io::Write;
 
@@ -25,11 +23,12 @@ fn repl() {
             .expect("error reading line");
 
         if line.is_empty() {
+            println!();
             continue;
         }
 
-        let lexer = Lexer::new();
-        let mut parser = Parser::new(lexer.scan(&line));
+        let mut lexer = Lexer::new(&line);
+        let mut parser = Parser::new(lexer.scan());
         let program = parser.parse();
         interpreter.run(&program);
     }

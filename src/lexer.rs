@@ -1,145 +1,185 @@
 use crate::token::Span;
 use crate::token::Token;
 
-#[derive(Default)]
-pub struct Lexer;
+pub struct Lexer {
+    src: Vec<char>,
+    idx: usize,
+    line: usize,
+}
 
 impl Lexer {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(src: &str) -> Self {
+        Self {
+            src: src.chars().collect(),
+            idx: 0,
+            line: 1,
+        }
     }
 
-    pub fn scan(&self, src: &str) -> Vec<Span> {
+    pub fn scan(&mut self) -> Vec<Span> {
         let mut spans: Vec<Span> = Vec::new();
-        let chars = src.chars().collect::<Vec<char>>();
-        let end = chars.len();
 
-        let mut line = 1;
-        let mut i = 0;
-        while i < end {
-            let curr = chars[i];
-            let token = match curr {
-                '(' => Token::Lparen,
-                ')' => Token::Rparen,
-                '{' => Token::Lbrace,
-                '}' => Token::Rbrace,
-                ',' => Token::Comma,
-                ';' => Token::Semi,
-                '.' => Token::Dot,
-
-                ' ' | '\t' | '\r' => {
-                    i += 1;
-                    continue;
-                }
-                '\n' => {
-                    line += 1;
-                    i += 1;
-                    continue;
-                }
-
-                '#' => {
-                    let mut j = i + 1;
-                    while j < end {
-                        let next = chars[j];
-                        if next == '\n' {
-                            line += 1;
-                            break;
-                        } else {
-                            j += 1;
-                            continue;
-                        }
-                    }
-                    i = j + 1;
-                    continue;
-                }
-
-                '+' => Token::Plus,
-                '-' => Token::Minus,
-                '*' => Token::Star,
-                '/' => Token::Slash,
-                '%' => Token::Percent,
-
-                '<' => {
-                    let j = i + 1;
-                    if j < end && chars[j] == '=' {
-                        i = j;
-                        Token::LtEq
-                    } else {
-                        Token::Lt
-                    }
-                }
-
-                '>' => {
-                    let j = i + 1;
-                    if j < end && chars[j] == '=' {
-                        i = j;
-                        Token::GtEq
-                    } else {
-                        Token::Gt
-                    }
-                }
-
-                '=' => {
-                    let j = i + 1;
-                    if j < end && chars[j] == '=' {
-                        i = j;
-                        Token::EqEq
-                    } else {
-                        Token::Eq
-                    }
-                }
-
-                '!' => {
-                    let j = i + 1;
-                    if j < end && chars[j] == '=' {
-                        i = j;
-                        Token::NotEq
-                    } else {
-                        i = j;
-                        continue;
-                    }
-                }
-
-                'a'...'z' | 'A'...'Z' | '_' => {
-                    let mut j = i + 1;
-                    while j < end && (chars[j] == '_' || chars[j].is_ascii_alphanumeric()) {
-                        j += 1;
-                    }
-                    let name = chars[i..j].iter().collect::<String>();
-                    i = j - 1;
-                    Token::get_keyword(&name).unwrap_or_else(|| Token::Ident(name))
-                }
-
-                '0'...'9' => {
-                    let mut j = i + 1;
-                    while j < end && (chars[j] == '.' || chars[j].is_ascii_digit()) {
-                        j += 1;
-                    }
-                    let rep = chars[i..j].iter().collect::<String>();
-                    let num = rep.parse::<f64>().unwrap();
-                    i = j - 1;
-                    Token::Num(num)
-                }
-
-                '"' => {
-                    let mut j = i + 1;
-                    while j < end && chars[j] != '"' {
-                        j += 1;
-                    }
-                    let inner = chars[i + 1..j].iter().collect::<String>();
-                    i = j;
-                    Token::Str(inner)
-                }
-
-                _ => Token::EOF,
-            };
-            spans.push(Span::new(token, line));
-            i += 1;
+        while !self.is_at_end() {
+            let line = self.line;
+            if let Some(token) = self.scan_token() {
+                spans.push(Span::new(token, line));
+            }
         }
 
-        spans.push(Span::new(Token::EOF, line));
+        spans.push(Span::new(Token::EOF, self.line));
         spans
     }
+
+    fn scan_token(&mut self) -> Option<Token> {
+        let curr = self.advance();
+        let token = match curr {
+            '(' => Token::Lparen,
+            ')' => Token::Rparen,
+            '{' => Token::Lbrace,
+            '}' => Token::Rbrace,
+            ',' => Token::Comma,
+            ';' => Token::Semi,
+            '.' => Token::Dot,
+
+            ' ' | '\t' | '\r' => return None,
+            '\n' => {
+                self.advance_line();
+                return None;
+            }
+
+            '#' => {
+                self.finish_line_comment();
+                return None;
+            }
+
+            '+' => Token::Plus,
+            '-' => Token::Minus,
+            '*' => Token::Star,
+            '/' => Token::Slash,
+            '%' => Token::Percent,
+
+            '<' => {
+                if self.matches('=') {
+                    Token::LtEq
+                } else {
+                    Token::Lt
+                }
+            }
+            '>' => {
+                if self.matches('=') {
+                    Token::GtEq
+                } else {
+                    Token::Gt
+                }
+            }
+            '=' => {
+                if self.matches('=') {
+                    Token::EqEq
+                } else {
+                    Token::Eq
+                }
+            }
+            '!' => {
+                if self.matches('=') {
+                    Token::NotEq
+                } else {
+                    // report error here
+                    return None;
+                }
+            }
+
+            'a'...'z' | 'A'...'Z' | '_' => self.scan_identifier(),
+            '0'...'9' => self.scan_number(),
+            '"' => self.scan_string(),
+
+            _ => {
+                // report error here
+                return None;
+            }
+        };
+        Some(token)
+    }
+
+    fn is_at_end(&self) -> bool {
+        self.idx >= self.src.len()
+    }
+
+    fn advance(&mut self) -> char {
+        let curr = self.src[self.idx];
+        self.idx += 1;
+        curr
+    }
+
+    fn advance_line(&mut self) {
+        self.line += 1;
+    }
+
+    fn consume(&mut self) {
+        self.idx += 1;
+    }
+
+    fn peek(&self) -> char {
+        self.src[self.idx]
+    }
+
+    fn matches(&mut self, expected: char) -> bool {
+        if !self.is_at_end() && self.peek() == expected {
+            self.consume();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn finish_line_comment(&mut self) {
+        while !self.is_at_end() {
+            let next = self.advance();
+            if next == '\n' {
+                self.advance_line();
+                return;
+            }
+        }
+    }
+
+    fn scan_identifier(&mut self) -> Token {
+        let start = self.idx - 1;
+        while !self.is_at_end() && is_alphanumeric(self.peek()) {
+            self.consume();
+        }
+        let name = self.src[start..self.idx].iter().collect::<String>();
+        Token::get_keyword(&name).unwrap_or_else(|| Token::Ident(name))
+    }
+
+    fn scan_number(&mut self) -> Token {
+        let start = self.idx - 1;
+        while !self.is_at_end() && (self.peek() == '.' || is_digit(self.peek())) {
+            self.consume();
+        }
+        let rep = self.src[start..self.idx].iter().collect::<String>();
+        let num = rep.parse::<f64>().unwrap();
+        Token::Num(num)
+    }
+
+    fn scan_string(&mut self) -> Token {
+        let start = self.idx;
+        while !self.is_at_end() && self.peek() != '"' {
+            let next = self.advance();
+            if next == '\n' {
+                self.advance_line();
+            }
+        }
+        let inner = self.src[start..self.idx].iter().collect::<String>();
+        self.consume();
+        Token::Str(inner)
+    }
+}
+
+fn is_alphanumeric(ch: char) -> bool {
+    ch == '_' || ch.is_ascii_alphanumeric()
+}
+
+fn is_digit(ch: char) -> bool {
+    ch.is_ascii_digit()
 }
 
 #[cfg(test)]
@@ -148,8 +188,7 @@ mod tests {
     use crate::token::Token::*;
 
     fn assert_tokens(src: &str, expected: &[Token]) {
-        let lexer = Lexer::new();
-        let spans = lexer.scan(src);
+        let spans = Lexer::new(src).scan();
         assert_eq!(expected.len(), spans.len());
         for i in 0..expected.len() {
             assert_eq!(expected[i], spans[i].token);
@@ -157,30 +196,55 @@ mod tests {
     }
 
     #[test]
-    fn empty_source_has_eof_token() {
+    fn eof_token_when_empty_source() {
         let src = "";
-        let expected = [EOF];
-        assert_tokens(src, &expected);
+        let spans = Lexer::new(src).scan();
+        assert_eq!(1, spans.len());
+        assert_eq!(EOF, spans[0].token);
     }
 
     #[test]
-    fn lines_start_at_one() {
+    fn eof_token_has_line_count() {
         let src = "";
-        let lexer = Lexer::new();
-        let spans = lexer.scan(src);
+        let spans = Lexer::new(src).scan();
         assert_eq!(1, spans.len());
         assert_eq!(1, spans[0].line);
     }
 
     #[test]
-    fn ignores_whitespace() {
+    fn eof_token_always_last() {
+        let src = ";";
+        let expected = [Semi, EOF];
+        assert_tokens(src, &expected);
+    }
+
+    #[test]
+    fn line_count_starts_at_one() {
+        let src = ";";
+        let spans = Lexer::new(src).scan();
+        assert_eq!(2, spans.len());
+        assert_eq!(Semi, spans[0].token);
+        assert_eq!(1, spans[0].line);
+    }
+
+    #[test]
+    fn line_count_increments() {
+        let src = ";\n;\n;";
+        let spans = Lexer::new(src).scan();
+        assert_eq!(4, spans.len());
+        assert_eq!(1, spans[0].line);
+        assert_eq!(3, spans[3].line);
+    }
+
+    #[test]
+    fn whitespace_is_ignored() {
         let src = " \t\r\n";
         let expected = [EOF];
         assert_tokens(src, &expected);
     }
 
     #[test]
-    fn ignores_hash_line_comments() {
+    fn line_comment_is_ignored() {
         let src = "#\n\
                    ##\n\
                    #a\n\
@@ -193,14 +257,14 @@ mod tests {
     }
 
     #[test]
-    fn punctuation_tokens() {
+    fn token_punctuations() {
         let src = "(){},;.";
         let expected = [Lparen, Rparen, Lbrace, Rbrace, Comma, Semi, Dot, EOF];
         assert_tokens(src, &expected);
     }
 
     #[test]
-    fn operator_tokens() {
+    fn token_operators() {
         let src = "+-*/% < <= > >= = == !=";
         let expected = [
             Plus, Minus, Star, Slash, Percent, Lt, LtEq, Gt, GtEq, Eq, EqEq, NotEq, EOF,
@@ -209,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn keyword_tokens() {
+    fn token_keywords() {
         let src = "and or not \
                    if elif else \
                    for while break continue return \
@@ -223,21 +287,42 @@ mod tests {
     }
 
     #[test]
-    fn literal_keyword_tokens() {
-        let src = "none true false";
-        let expected = [None, True, False, EOF];
+    fn literal_keyword_none() {
+        let src = "none";
+        let expected = [None, EOF];
         assert_tokens(src, &expected);
     }
 
     #[test]
-    fn literal_number_tokens() {
-        let src = "0 1 3 5.0 10.01";
-        let expected = [Num(0.0), Num(1.0), Num(3.0), Num(5.0), Num(10.01), EOF];
+    fn literal_keyword_booleans() {
+        let src = "true false";
+        let expected = [True, False, EOF];
         assert_tokens(src, &expected);
     }
 
     #[test]
-    fn literal_string_tokens() {
+    fn literal_number_integers() {
+        let src = "0 1 3 10 500";
+        let expected = [Num(0.0), Num(1.0), Num(3.0), Num(10.0), Num(500.0), EOF];
+        assert_tokens(src, &expected);
+    }
+
+    #[test]
+    fn literal_number_decimals() {
+        let src = "0.0 0.1 3.1415 10.01 500.001";
+        let expected = [
+            Num(0.0),
+            Num(0.1),
+            Num(3.1415),
+            Num(10.01),
+            Num(500.001),
+            EOF,
+        ];
+        assert_tokens(src, &expected);
+    }
+
+    #[test]
+    fn literal_strings() {
         let src = r#" "" "a" "abc" "#;
         let expected = [
             Str("".to_owned()),
@@ -249,7 +334,25 @@ mod tests {
     }
 
     #[test]
-    fn literal_identifier_tokens() {
+    fn literal_string_has_starting_line_count() {
+        let src = " \"a\nb\" ";
+        let spans = Lexer::new(src).scan();
+        assert_eq!(2, spans.len());
+        assert_eq!(Str("a\nb".to_owned()), spans[0].token);
+        assert_eq!(1, spans[0].line);
+    }
+
+    #[test]
+    fn literal_string_increments_line_count() {
+        let src = " \"a\nb\" ";
+        let spans = Lexer::new(src).scan();
+        assert_eq!(2, spans.len());
+        assert_eq!(EOF, spans[1].token);
+        assert_eq!(2, spans[1].line);
+    }
+
+    #[test]
+    fn literal_identifiers() {
         let src = "_ __ _a a_ _a_ a_b a ab A Ab AB";
         let expected = [
             Ident("_".to_owned()),
