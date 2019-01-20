@@ -1,5 +1,7 @@
 //! Module for source-level syntactic elements.
 
+use std::fmt;
+
 /// The fundamental units of the language.
 ///
 /// Each token represents an atomic element of the language grammar. A few of the literal tokens
@@ -22,17 +24,17 @@ pub enum Token {
     Slash,
     Percent,
     Lt,
-    LtEq,
     Gt,
-    GtEq,
     Eq,
+    LtEq,
+    GtEq,
     EqEq,
     NotEq,
 
     // Keywords.
+    Not,
     And,
     Or,
-    Not,
     If,
     Elif,
     Else,
@@ -62,9 +64,9 @@ pub enum Token {
 impl Token {
     pub fn get_keyword(ident: &str) -> Option<Token> {
         Some(match ident {
+            "not" => Token::Not,
             "and" => Token::And,
             "or" => Token::Or,
-            "not" => Token::Not,
             "if" => Token::If,
             "elif" => Token::Elif,
             "else" => Token::Else,
@@ -83,6 +85,54 @@ impl Token {
             "false" => Token::False,
             _ => return None,
         })
+    }
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Token::Lparen => write!(f, "("),
+            Token::Rparen => write!(f, ")"),
+            Token::Lbrace => write!(f, "{{"),
+            Token::Rbrace => write!(f, "}}"),
+            Token::Comma => write!(f, ","),
+            Token::Semi => write!(f, ";"),
+            Token::Dot => write!(f, "."),
+            Token::Plus => write!(f, "+"),
+            Token::Minus => write!(f, "-"),
+            Token::Star => write!(f, "*"),
+            Token::Slash => write!(f, "/"),
+            Token::Percent => write!(f, "%"),
+            Token::Lt => write!(f, "<"),
+            Token::Gt => write!(f, ">"),
+            Token::Eq => write!(f, "="),
+            Token::LtEq => write!(f, "<="),
+            Token::GtEq => write!(f, ">="),
+            Token::EqEq => write!(f, "=="),
+            Token::NotEq => write!(f, "!="),
+            Token::Not => write!(f, "not"),
+            Token::And => write!(f, "and"),
+            Token::Or => write!(f, "or"),
+            Token::If => write!(f, "if"),
+            Token::Elif => write!(f, "elif"),
+            Token::Else => write!(f, "else"),
+            Token::For => write!(f, "for"),
+            Token::While => write!(f, "while"),
+            Token::Break => write!(f, "break"),
+            Token::Cont => write!(f, "continue"),
+            Token::Ret => write!(f, "return"),
+            Token::Let => write!(f, "let"),
+            Token::Fun => write!(f, "fun"),
+            Token::Class => write!(f, "class"),
+            Token::Self_ => write!(f, "self"),
+            Token::Super => write!(f, "super"),
+            Token::None => write!(f, "none"),
+            Token::True => write!(f, "true"),
+            Token::False => write!(f, "false"),
+            Token::Num(n) => write!(f, "{}", n),
+            Token::Str(ref s) | Token::Ident(ref s) => write!(f, "{}", s),
+            Token::EOF => write!(f, "EOF"),
+        }
     }
 }
 

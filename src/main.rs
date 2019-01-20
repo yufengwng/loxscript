@@ -5,6 +5,7 @@ use loxscript::interpreter::Interpreter;
 use loxscript::lexer::Lexer;
 use loxscript::parser::Parser;
 
+// todo: impl run script file and return error codes
 fn main() {
     repl();
 }
@@ -27,9 +28,16 @@ fn repl() {
             continue;
         }
 
-        let mut lexer = Lexer::new(&line);
-        let mut parser = Parser::new(lexer.scan());
-        let program = parser.parse();
-        interpreter.run(&program);
+        let lexer = Lexer::new(&line);
+        let scan_report = lexer.scan();
+
+        let parser = Parser::new(scan_report.spans);
+        let parse_report = parser.parse();
+
+        if scan_report.had_error || parse_report.had_error {
+            continue;
+        }
+
+        interpreter.run(&parse_report.decls);
     }
 }
