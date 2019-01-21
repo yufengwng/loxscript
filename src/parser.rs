@@ -1,9 +1,9 @@
 use std::error;
 use std::fmt;
 
-use crate::item::{BinOp, LogOp, UniOp};
-use crate::item::{Decl, Expr, Primitive, Stmt};
-use crate::token::{Span, Token};
+use crate::ast::{BinOp, LogOp, UniOp};
+use crate::ast::{Decl, Expr, Primitive, Stmt};
+use crate::ast::{Span, Token};
 
 #[derive(Debug)]
 enum ParseError {

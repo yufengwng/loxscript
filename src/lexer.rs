@@ -1,5 +1,5 @@
-use crate::token::Span;
-use crate::token::Token;
+use crate::ast::Span;
+use crate::ast::Token;
 
 pub struct ScanReport {
     pub spans: Vec<Span>,
@@ -230,7 +230,7 @@ fn is_digit(ch: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::token::Token::*;
+    use crate::ast::Token::*;
 
     fn assert_tokens(src: &str, expected: &[Token]) {
         let spans = Lexer::new(src).scan().spans;
