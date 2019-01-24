@@ -8,6 +8,7 @@ use crate::ast::{Span, Token};
 #[derive(Debug)]
 enum ParseError {
     MissingExpr(Span),
+    NotConsumed(Span, &'static str),
 }
 
 impl fmt::Display for ParseError {
@@ -17,6 +18,11 @@ impl fmt::Display for ParseError {
                 f,
                 "[line {}] parse error at '{}': expected an expression",
                 span.line, span.token
+            ),
+            ParseError::NotConsumed(ref span, ref msg) => write!(
+                f,
+                "[line {}] parse error at '{}': {}",
+                span.line, span.token, msg
             ),
         }
     }
@@ -159,10 +165,17 @@ impl Parser {
             Token::False => Expr::Literal(Primitive::Bool(false, curr.line)),
             Token::Num(n) => Expr::Literal(Primitive::Num(*n, curr.line)),
             Token::Str(s) => Expr::Literal(Primitive::Str(s.clone(), curr.line)),
+            Token::Ident(s) => Expr::Variable(s.clone(), curr.line),
+            Token::Lparen => {
+                self.advance();
+                let expr = self.expression()?;
+                self.consume(Token::Rparen, "expected ')' after expression")?;
+                return Ok(Expr::Group(Box::new(expr)));
+            }
             _ => return Err(ParseError::MissingExpr(curr.clone())),
         };
 
-        self.consume();
+        self.advance();
         Ok(expr)
     }
 
@@ -180,8 +193,12 @@ impl Parser {
         &self.spans[self.idx]
     }
 
-    fn consume(&mut self) {
-        self.idx += 1;
+    fn consume(&mut self, token: Token, msg: &'static str) -> Result<Span, ParseError> {
+        if !self.is_at_end() && self.peek().token == token {
+            Ok(self.advance().clone())
+        } else {
+            Err(ParseError::NotConsumed(self.peek().clone(), msg))
+        }
     }
 
     fn consume_unary_op(&mut self) -> Option<UniOp> {
@@ -196,7 +213,7 @@ impl Parser {
             _ => return None,
         };
 
-        self.consume();
+        self.advance();
         Some(op)
     }
 
@@ -213,7 +230,7 @@ impl Parser {
             _ => return None,
         };
 
-        self.consume();
+        self.advance();
         Some(op)
     }
 
@@ -229,7 +246,7 @@ impl Parser {
             _ => return None,
         };
 
-        self.consume();
+        self.advance();
         Some(op)
     }
 
@@ -247,7 +264,7 @@ impl Parser {
             _ => return None,
         };
 
-        self.consume();
+        self.advance();
         Some(op)
     }
 
@@ -263,7 +280,7 @@ impl Parser {
             _ => return None,
         };
 
-        self.consume();
+        self.advance();
         Some(op)
     }
 
@@ -278,7 +295,7 @@ impl Parser {
             _ => return None,
         };
 
-        self.consume();
+        self.advance();
         Some(op)
     }
 
@@ -293,7 +310,7 @@ impl Parser {
             _ => return None,
         };
 
-        self.consume();
+        self.advance();
         Some(op)
     }
 

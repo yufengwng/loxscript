@@ -148,6 +148,8 @@ impl Interpreter {
                     }
                 }
             }
+            Expr::Variable(_, _) => Value::None,
+            Expr::Group(ref inner) => self.eval(inner)?,
         })
     }
 }

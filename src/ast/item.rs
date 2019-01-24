@@ -41,6 +41,8 @@ pub enum Expr {
     Binary(Box<Expr>, BinOp, Box<Expr>),
     Unary(UniOp, Box<Expr>),
     Literal(Primitive),
+    Variable(String, usize),
+    Group(Box<Expr>),
 }
 
 /// Language items for control flow or side effects.
