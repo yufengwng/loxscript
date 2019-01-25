@@ -75,7 +75,9 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
-        self.expression().map(Stmt::Expression)
+        let expr = self.expression()?;
+        self.consume(&Token::Semi, "expected ';' after expression")?;
+        Ok(Stmt::Expression(expr))
     }
 
     fn expression(&mut self) -> Result<Expr, ParseError> {
@@ -169,7 +171,7 @@ impl Parser {
             Token::Lparen => {
                 self.advance();
                 let expr = self.expression()?;
-                self.consume(Token::Rparen, "expected ')' after expression")?;
+                self.consume(&Token::Rparen, "expected ')' after expression")?;
                 return Ok(Expr::Group(Box::new(expr)));
             }
             _ => return Err(ParseError::MissingExpr(curr.clone())),
@@ -193,8 +195,8 @@ impl Parser {
         &self.spans[self.idx]
     }
 
-    fn consume(&mut self, token: Token, msg: &'static str) -> Result<Span, ParseError> {
-        if !self.is_at_end() && self.peek().token == token {
+    fn consume(&mut self, token: &Token, msg: &'static str) -> Result<Span, ParseError> {
+        if !self.is_at_end() && self.peek().token == *token {
             Ok(self.advance().clone())
         } else {
             Err(ParseError::NotConsumed(self.peek().clone(), msg))
@@ -325,10 +327,18 @@ mod tests {
 
     #[test]
     fn parse_literal_expression_statement() {
-        let spans = [Token::None, Token::True, Token::False, Token::EOF]
-            .iter()
-            .map(|t| Span::new(t.clone(), 1))
-            .collect::<Vec<_>>();
+        let spans = [
+            Token::None,
+            Token::Semi,
+            Token::True,
+            Token::Semi,
+            Token::False,
+            Token::Semi,
+            Token::EOF,
+        ]
+        .iter()
+        .map(|t| Span::new(t.clone(), 1))
+        .collect::<Vec<_>>();
         let actual = Parser::new(spans).parse();
 
         assert_eq!(3, actual.decls.len());

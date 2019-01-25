@@ -4,7 +4,8 @@ program     : declaration* EOF ;
 
 declaration : statement ;
 
-statement   : expression ';' ;
+statement   : expr_stmt ;
+expr_stmt   : expression ';' ;
 
 expression  : logical_or ;
 logical_or  : logical_and ( 'or' logical_and )* ;
