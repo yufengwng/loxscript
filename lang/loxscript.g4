@@ -2,7 +2,8 @@ grammar loxscript;
 
 program     : declaration* EOF ;
 
-declaration : statement ;
+declaration : let_decl | statement ;
+let_decl    : 'let' IDENT ( '=' expression )? ';' ;
 
 statement   : expr_stmt ;
 expr_stmt   : expression ';' ;

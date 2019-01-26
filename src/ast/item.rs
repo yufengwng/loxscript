@@ -52,5 +52,6 @@ pub enum Stmt {
 
 /// Language items that introduce name bindings.
 pub enum Decl {
+    Let(String, Option<Expr>, usize),
     Statement(Stmt),
 }

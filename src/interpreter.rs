@@ -49,6 +49,7 @@ impl Interpreter {
         for decl in program {
             match decl {
                 Decl::Statement(ref stmt) => self.exec(stmt)?,
+                _ => continue,
             }
         }
         Ok(())

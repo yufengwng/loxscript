@@ -13,13 +13,13 @@ enum ParseError {
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            ParseError::MissingExpr(ref span) => write!(
+        match self {
+            ParseError::MissingExpr(span) => write!(
                 f,
                 "[line {}] parse error at '{}': expected an expression",
                 span.line, span.token
             ),
-            ParseError::NotConsumed(ref span, ref msg) => write!(
+            ParseError::NotConsumed(span, msg) => write!(
                 f,
                 "[line {}] parse error at '{}': {}",
                 span.line, span.token, msg
@@ -71,7 +71,23 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Result<Decl, ParseError> {
+        if self.matches(&Token::Let) {
+            return self.let_declaration();
+        }
         self.statement().map(Decl::Statement)
+    }
+
+    fn let_declaration(&mut self) -> Result<Decl, ParseError> {
+        let (name, line) = self.consume_ident("expected variable name")?;
+
+        let init = if self.matches(&Token::Eq) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(&Token::Semi, "expected ';' after variable declaration")?;
+        Ok(Decl::Let(name, init, line))
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
@@ -195,12 +211,32 @@ impl Parser {
         &self.spans[self.idx]
     }
 
+    fn matches(&mut self, token: &Token) -> bool {
+        if !self.is_at_end() && self.peek().token == *token {
+            self.advance();
+            true
+        } else {
+            false
+        }
+    }
+
     fn consume(&mut self, token: &Token, msg: &'static str) -> Result<Span, ParseError> {
         if !self.is_at_end() && self.peek().token == *token {
             Ok(self.advance().clone())
         } else {
             Err(ParseError::NotConsumed(self.peek().clone(), msg))
         }
+    }
+
+    fn consume_ident(&mut self, msg: &'static str) -> Result<(String, usize), ParseError> {
+        if !self.is_at_end() {
+            let curr = self.peek().clone();
+            if let Token::Ident(name) = curr.token {
+                self.advance();
+                return Ok((name, curr.line));
+            }
+        }
+        Err(ParseError::NotConsumed(self.peek().clone(), msg))
     }
 
     fn consume_unary_op(&mut self) -> Option<UniOp> {
