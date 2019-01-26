@@ -1,7 +1,9 @@
 use std::error;
 use std::fmt;
 
-use crate::ast::{BinOp, Decl, Expr, LogOp, Primitive, Stmt, UniOp};
+use crate::ast::{BinOp, LogOp, UniOp};
+use crate::ast::{Decl, Expr, Primitive, Stmt};
+use crate::runtime::Env;
 use crate::runtime::Value;
 
 #[derive(Debug)]
@@ -9,11 +11,12 @@ enum RuntimeError {
     BinAddUnsupportedType(usize),
     BinNonNumeric(usize),
     UniNonNumeric(usize),
+    UndefinedVar(String, usize),
 }
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
+        match self {
             RuntimeError::BinAddUnsupportedType(line) => write!(
                 f,
                 "[line {}] runtime error: operands must be two numbers or two strings",
@@ -25,6 +28,11 @@ impl fmt::Display for RuntimeError {
             RuntimeError::UniNonNumeric(line) => {
                 write!(f, "[line {}] runtime error: operand must be a number", line)
             }
+            RuntimeError::UndefinedVar(name, line) => write!(
+                f,
+                "[line {}] runtime error: undefined variable '{}'",
+                line, name
+            ),
         }
     }
 }
@@ -32,11 +40,13 @@ impl fmt::Display for RuntimeError {
 impl error::Error for RuntimeError {}
 
 #[derive(Default)]
-pub struct Interpreter;
+pub struct Interpreter {
+    env: Env,
+}
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self {}
+        Self { env: Env::new() }
     }
 
     pub fn run(&mut self, program: &[Decl]) {
@@ -47,10 +57,21 @@ impl Interpreter {
 
     fn interpret(&mut self, program: &[Decl]) -> Result<(), RuntimeError> {
         for decl in program {
-            match decl {
-                Decl::Statement(ref stmt) => self.exec(stmt)?,
-                _ => continue,
+            self.declare(decl)?;
+        }
+        Ok(())
+    }
+
+    fn declare(&mut self, decl: &Decl) -> Result<(), RuntimeError> {
+        match decl {
+            Decl::Let(name, init, _) => {
+                let value = match init {
+                    Some(expr) => self.eval(expr)?,
+                    None => Value::None,
+                };
+                self.env.define(name.clone(), value);
             }
+            Decl::Statement(stmt) => self.exec(stmt)?,
         }
         Ok(())
     }
@@ -149,7 +170,10 @@ impl Interpreter {
                     }
                 }
             }
-            Expr::Variable(_, _) => Value::None,
+            Expr::Variable(name, line) => self
+                .env
+                .get(name)
+                .ok_or_else(|| RuntimeError::UndefinedVar(name.clone(), *line))?,
             Expr::Group(ref inner) => self.eval(inner)?,
         })
     }
