@@ -47,6 +47,7 @@ pub enum Expr {
 
 /// Language items for control flow or side effects.
 pub enum Stmt {
+    Assignment(String, Expr, usize),
     Expression(Expr),
 }
 

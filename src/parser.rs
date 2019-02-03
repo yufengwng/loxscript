@@ -7,6 +7,7 @@ use crate::ast::{Span, Token};
 
 #[derive(Debug)]
 enum ParseError {
+    InvalidAssignTarget(Span),
     MissingExpr(Span),
     NotConsumed(Span, &'static str),
 }
@@ -14,6 +15,11 @@ enum ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            ParseError::InvalidAssignTarget(span) => write!(
+                f,
+                "[line {}] parse error at '{}': invalid assignment target",
+                span.line, span.token
+            ),
             ParseError::MissingExpr(span) => write!(
                 f,
                 "[line {}] parse error at '{}': expected an expression",
@@ -92,6 +98,20 @@ impl Parser {
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
         let expr = self.expression()?;
+        if !self.is_at_end() && self.peek().token == Token::Eq {
+            let equals = self.advance().clone();
+            let value = self.expression()?;
+            match expr {
+                Expr::Variable(name, line) => {
+                    self.consume(&Token::Semi, "expected ';' after assignment")?;
+                    return Ok(Stmt::Assignment(name, value, line));
+                }
+                _ => {
+                    eprintln!("{}", ParseError::InvalidAssignTarget(equals));
+                    self.had_error = true;
+                }
+            }
+        }
         self.consume(&Token::Semi, "expected ';' after expression")?;
         Ok(Stmt::Expression(expr))
     }

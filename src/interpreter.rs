@@ -76,10 +76,16 @@ impl Interpreter {
         Ok(())
     }
 
-    fn exec(&self, stmt: &Stmt) -> Result<(), RuntimeError> {
+    fn exec(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
             Stmt::Expression(ref expr) => {
                 println!("{:?}", self.eval(expr)?);
+            }
+            Stmt::Assignment(ref name, ref expr, ref line) => {
+                let value = self.eval(expr)?;
+                if !self.env.assign(name.clone(), value) {
+                    return Err(RuntimeError::UndefinedVar(name.clone(), *line));
+                }
             }
         }
         Ok(())
