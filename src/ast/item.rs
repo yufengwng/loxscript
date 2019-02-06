@@ -49,6 +49,7 @@ pub enum Expr {
 pub enum Stmt {
     Assignment(String, Expr, usize),
     Expression(Expr),
+    Block(Vec<Decl>),
 }
 
 /// Language items that introduce name bindings.

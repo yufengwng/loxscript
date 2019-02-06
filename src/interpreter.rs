@@ -1,5 +1,7 @@
+use std::cell::RefCell;
 use std::error;
 use std::fmt;
+use std::rc::Rc;
 
 use crate::ast::{BinOp, LogOp, UniOp};
 use crate::ast::{Decl, Expr, Primitive, Stmt};
@@ -41,12 +43,14 @@ impl error::Error for RuntimeError {}
 
 #[derive(Default)]
 pub struct Interpreter {
-    env: Env,
+    env: Rc<RefCell<Env>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self { env: Env::new() }
+        Self {
+            env: Rc::new(RefCell::new(Env::new())),
+        }
     }
 
     pub fn run(&mut self, program: &[Decl]) {
@@ -69,7 +73,7 @@ impl Interpreter {
                     Some(expr) => self.eval(expr)?,
                     None => Value::None,
                 };
-                self.env.define(name.clone(), value);
+                self.env.borrow_mut().define(name.clone(), value);
             }
             Decl::Statement(stmt) => self.exec(stmt)?,
         }
@@ -83,12 +87,29 @@ impl Interpreter {
             }
             Stmt::Assignment(ref name, ref expr, ref line) => {
                 let value = self.eval(expr)?;
-                if !self.env.assign(name.clone(), value) {
+                if !self.env.borrow_mut().assign(name.clone(), value) {
                     return Err(RuntimeError::UndefinedVar(name.clone(), *line));
                 }
             }
+            Stmt::Block(decls) => self.exec_block(decls, Env::enclosing(Rc::clone(&self.env)))?,
         }
         Ok(())
+    }
+
+    fn exec_block(&mut self, decls: &[Decl], env: Env) -> Result<(), RuntimeError> {
+        let prev = Rc::clone(&self.env);
+        self.env = Rc::new(RefCell::new(env));
+
+        let mut res = Ok(());
+        for decl in decls {
+            res = self.declare(decl);
+            if res.is_err() {
+                break;
+            }
+        }
+
+        self.env = prev;
+        res
     }
 
     fn eval(&self, expr: &Expr) -> Result<Value, RuntimeError> {
@@ -178,7 +199,8 @@ impl Interpreter {
             }
             Expr::Variable(name, line) => self
                 .env
-                .get(name)
+                .borrow()
+                .search(name)
                 .ok_or_else(|| RuntimeError::UndefinedVar(name.clone(), *line))?,
             Expr::Group(ref inner) => self.eval(inner)?,
         })

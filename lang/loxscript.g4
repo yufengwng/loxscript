@@ -5,9 +5,10 @@ program     : declaration* EOF ;
 declaration : let_decl | statement ;
 let_decl    : 'let' IDENT ( '=' expression )? ';' ;
 
-statement   : assign_stmt | expr_stmt ;
+statement   : assign_stmt | expr_stmt | block ;
 assign_stmt : IDENT '=' expression ';' ;
 expr_stmt   : expression ';' ;
+block       : '{' declaration* '}' ;
 
 expression  : logical_or ;
 logical_or  : logical_and ( 'or' logical_and )* ;

@@ -97,6 +97,10 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
+        if self.matches(&Token::Lbrace) {
+            return Ok(Stmt::Block(self.block()?));
+        }
+
         let expr = self.expression()?;
         if !self.is_at_end() && self.peek().token == Token::Eq {
             let equals = self.advance().clone();
@@ -114,6 +118,15 @@ impl Parser {
         }
         self.consume(&Token::Semi, "expected ';' after expression")?;
         Ok(Stmt::Expression(expr))
+    }
+
+    fn block(&mut self) -> Result<Vec<Decl>, ParseError> {
+        let mut decls = Vec::new();
+        while !self.is_at_end() && self.peek().token != Token::Rbrace {
+            decls.push(self.declaration()?);
+        }
+        self.consume(&Token::Rbrace, "expected '}' after block")?;
+        Ok(decls)
     }
 
     fn expression(&mut self) -> Result<Expr, ParseError> {
