@@ -5,9 +5,12 @@ use crate::ast::{BinOp, LogOp, UniOp};
 use crate::ast::{Decl, Expr, Primitive, Stmt};
 use crate::ast::{Span, Token};
 
+const MAX_ARGS: usize = 8;
+
 #[derive(Debug)]
 enum ParseError {
     InvalidAssignTarget(Span),
+    MaxArgs(Span),
     MissingExpr(Span),
     NotConsumed(Span, &'static str),
 }
@@ -19,6 +22,11 @@ impl fmt::Display for ParseError {
                 f,
                 "[line {}] parse error at '{}': invalid assignment target",
                 span.line, span.token
+            ),
+            ParseError::MaxArgs(span) => write!(
+                f,
+                "[line {}] parse error at '{}': cannot have more than {} arguments",
+                span.line, span.token, MAX_ARGS
             ),
             ParseError::MissingExpr(span) => write!(
                 f,
@@ -63,8 +71,7 @@ impl Parser {
             match self.declaration() {
                 Ok(decl) => decls.push(decl),
                 Err(err) => {
-                    eprintln!("{}", err);
-                    self.had_error = true;
+                    self.log_err(err);
                     self.synchronize();
                 }
             }
@@ -111,8 +118,7 @@ impl Parser {
                     return Ok(Stmt::Assignment(name, value, line));
                 }
                 _ => {
-                    eprintln!("{}", ParseError::InvalidAssignTarget(equals));
-                    self.had_error = true;
+                    self.log_err(ParseError::InvalidAssignTarget(equals));
                 }
             }
         }
@@ -202,9 +208,37 @@ impl Parser {
     fn unary(&mut self) -> Result<Expr, ParseError> {
         if let Some(op) = self.consume_unary_op() {
             let rhs = self.unary()?;
-            return Ok(Expr::Unary(op, Box::new(rhs)));
+            Ok(Expr::Unary(op, Box::new(rhs)))
+        } else {
+            self.parse_call()
         }
-        self.primary()
+    }
+
+    fn parse_call(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.primary()?;
+        loop {
+            if self.matches(&Token::Lparen) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, expr: Expr) -> Result<Expr, ParseError> {
+        let mut args = Vec::new();
+        if !self.check(&Token::Rparen) {
+            args.push(self.expression()?);
+            while self.matches(&Token::Comma) {
+                if args.len() >= MAX_ARGS {
+                    self.log_err(ParseError::MaxArgs(self.peek().clone()));
+                }
+                args.push(self.expression()?);
+            }
+        }
+        let paren = self.consume(&Token::Rparen, "expected ')' after arguments")?;
+        Ok(Expr::Call(Box::new(expr), args, paren.line))
     }
 
     fn primary(&mut self) -> Result<Expr, ParseError> {
@@ -242,6 +276,10 @@ impl Parser {
 
     fn peek(&self) -> &Span {
         &self.spans[self.idx]
+    }
+
+    fn check(&self, token: &Token) -> bool {
+        !self.is_at_end() && self.peek().token == *token
     }
 
     fn matches(&mut self, token: &Token) -> bool {
@@ -383,6 +421,11 @@ impl Parser {
 
         self.advance();
         Some(op)
+    }
+
+    fn log_err(&mut self, err: ParseError) {
+        eprintln!("{}", err);
+        self.had_error = true;
     }
 
     fn synchronize(&mut self) {

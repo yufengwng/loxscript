@@ -40,6 +40,7 @@ pub enum Expr {
     Logical(Box<Expr>, LogOp, Box<Expr>),
     Binary(Box<Expr>, BinOp, Box<Expr>),
     Unary(UniOp, Box<Expr>),
+    Call(Box<Expr>, Vec<Expr>, usize),
     Literal(Primitive),
     Variable(String, usize),
     Group(Box<Expr>),

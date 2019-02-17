@@ -5,6 +5,8 @@ program     : declaration* EOF ;
 declaration : let_decl | statement ;
 let_decl    : 'let' IDENT ( '=' expression )? ';' ;
 
+arguments   : expression ( ',' expression )* ;
+
 statement   : assign_stmt | expr_stmt | block ;
 assign_stmt : IDENT '=' expression ';' ;
 expr_stmt   : expression ';' ;
@@ -18,6 +20,7 @@ comparison  : addition ( ( '<' | '<=' | '>' | '>=' ) addition )* ;
 addition    : multiply ( ( '+' | '-' ) multiply )* ;
 multiply    : unary ( ( '*' | '/' | '%' ) unary )* ;
 unary       : ( '-' | 'not' ) unary | primary ;
+call        : primary ( '(' arguments? ')' )* ;
 
 primary     : 'none' | 'true' | 'false'
             | NUM | STR | IDENT

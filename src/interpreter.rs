@@ -5,20 +5,28 @@ use std::rc::Rc;
 
 use crate::ast::{BinOp, LogOp, UniOp};
 use crate::ast::{Decl, Expr, Primitive, Stmt};
+use crate::runtime::Callable;
 use crate::runtime::Env;
 use crate::runtime::Value;
 
 #[derive(Debug)]
-enum RuntimeError {
+pub enum RuntimeError {
+    Arity(usize, usize, usize),
     BinAddUnsupportedType(usize),
     BinNonNumeric(usize),
+    NotCallable(usize),
     UniNonNumeric(usize),
-    UndefinedVar(String, usize),
+    UndefinedVar(usize, String),
 }
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            RuntimeError::Arity(line, expected, actual) => write!(
+                f,
+                "[line {}] runtime error: expected {} arguments but got {}",
+                line, expected, actual
+            ),
             RuntimeError::BinAddUnsupportedType(line) => write!(
                 f,
                 "[line {}] runtime error: operands must be two numbers or two strings",
@@ -27,10 +35,13 @@ impl fmt::Display for RuntimeError {
             RuntimeError::BinNonNumeric(line) => {
                 write!(f, "[line {}] runtime error: operands must be numbers", line)
             }
+            RuntimeError::NotCallable(line) => {
+                write!(f, "[line {}] runtime error: can only call functions and classes", line)
+            }
             RuntimeError::UniNonNumeric(line) => {
                 write!(f, "[line {}] runtime error: operand must be a number", line)
             }
-            RuntimeError::UndefinedVar(name, line) => write!(
+            RuntimeError::UndefinedVar(line, name) => write!(
                 f,
                 "[line {}] runtime error: undefined variable '{}'",
                 line, name
@@ -41,6 +52,30 @@ impl fmt::Display for RuntimeError {
 
 impl error::Error for RuntimeError {}
 
+#[derive(Debug)]
+struct Print;
+
+impl Callable for Print {
+    fn call(&self, _: &mut Interpreter, args: Vec<Value>) -> Result<Value, RuntimeError> {
+        println!("{}", args[0]);
+        Ok(Value::None)
+    }
+
+    fn arity(&self) -> usize {
+        1
+    }
+
+    fn name(&self) -> String {
+        "print".to_owned()
+    }
+}
+
+impl fmt::Display for Print {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "<native fn print>")
+    }
+}
+
 #[derive(Default)]
 pub struct Interpreter {
     env: Rc<RefCell<Env>>,
@@ -48,8 +83,10 @@ pub struct Interpreter {
 
 impl Interpreter {
     pub fn new() -> Self {
+        let mut globals = Env::new();
+        globals.define(Print.name(), Value::Callable(Rc::new(Print)));
         Self {
-            env: Rc::new(RefCell::new(Env::new())),
+            env: Rc::new(RefCell::new(globals)),
         }
     }
 
@@ -88,7 +125,7 @@ impl Interpreter {
             Stmt::Assignment(ref name, ref expr, ref line) => {
                 let value = self.eval(expr)?;
                 if !self.env.borrow_mut().assign(name.clone(), value) {
-                    return Err(RuntimeError::UndefinedVar(name.clone(), *line));
+                    return Err(RuntimeError::UndefinedVar(*line, name.clone()));
                 }
             }
             Stmt::Block(decls) => self.exec_block(decls, Env::enclosing(Rc::clone(&self.env)))?,
@@ -112,7 +149,7 @@ impl Interpreter {
         res
     }
 
-    fn eval(&self, expr: &Expr) -> Result<Value, RuntimeError> {
+    fn eval(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
         Ok(match expr {
             Expr::Literal(ref prim) => match prim {
                 Primitive::None(_) => Value::None,
@@ -197,11 +234,32 @@ impl Interpreter {
                     }
                 }
             }
+            Expr::Call(expr, arguments, line) => {
+                let callee = self.eval(expr)?;
+
+                let mut args = Vec::new();
+                for arg in arguments {
+                    args.push(self.eval(arg)?);
+                }
+
+                let fun = match callee {
+                    Value::Callable(fun) => fun,
+                    _ => {
+                        return Err(RuntimeError::NotCallable(*line));
+                    }
+                };
+
+                if args.len() != fun.arity() {
+                    return Err(RuntimeError::Arity(*line, fun.arity(), args.len()));
+                }
+
+                fun.call(self, args)?
+            }
             Expr::Variable(name, line) => self
                 .env
                 .borrow()
                 .search(name)
-                .ok_or_else(|| RuntimeError::UndefinedVar(name.clone(), *line))?,
+                .ok_or_else(|| RuntimeError::UndefinedVar(*line, name.clone()))?,
             Expr::Group(ref inner) => self.eval(inner)?,
         })
     }
