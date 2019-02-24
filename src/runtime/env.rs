@@ -18,10 +18,10 @@ impl Env {
         }
     }
 
-    pub fn enclosing(inner: Rc<RefCell<Env>>) -> Self {
+    pub fn enclosing(inner: &Rc<RefCell<Env>>) -> Self {
         Self {
             values: HashMap::new(),
-            inner: Some(inner),
+            inner: Some(Rc::clone(inner)),
         }
     }
 

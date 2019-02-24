@@ -5,9 +5,9 @@ use std::rc::Rc;
 
 use crate::ast::{BinOp, LogOp, UniOp};
 use crate::ast::{Decl, Expr, Primitive, Stmt};
-use crate::runtime::Callable;
 use crate::runtime::Env;
 use crate::runtime::Value;
+use crate::runtime::{Callable, Function};
 
 #[derive(Debug)]
 pub enum RuntimeError {
@@ -35,9 +35,11 @@ impl fmt::Display for RuntimeError {
             RuntimeError::BinNonNumeric(line) => {
                 write!(f, "[line {}] runtime error: operands must be numbers", line)
             }
-            RuntimeError::NotCallable(line) => {
-                write!(f, "[line {}] runtime error: can only call functions and classes", line)
-            }
+            RuntimeError::NotCallable(line) => write!(
+                f,
+                "[line {}] runtime error: can only call functions and classes",
+                line
+            ),
             RuntimeError::UniNonNumeric(line) => {
                 write!(f, "[line {}] runtime error: operand must be a number", line)
             }
@@ -76,6 +78,11 @@ impl fmt::Display for Print {
     }
 }
 
+pub enum Signal {
+    Ret(Value),
+    None,
+}
+
 #[derive(Default)]
 pub struct Interpreter {
     env: Rc<RefCell<Env>>,
@@ -103,44 +110,60 @@ impl Interpreter {
         Ok(())
     }
 
-    fn declare(&mut self, decl: &Decl) -> Result<(), RuntimeError> {
+    fn declare(&mut self, decl: &Decl) -> Result<Signal, RuntimeError> {
         match decl {
-            Decl::Let(name, init, _) => {
+            Decl::Function(name, params, body) => {
+                let fun = Function::new(name.to_owned(), params.to_vec(), body, &self.env);
+                self.env
+                    .borrow_mut()
+                    .define(fun.name(), Value::Callable(Rc::new(fun)));
+            }
+            Decl::Let(name, init) => {
                 let value = match init {
                     Some(expr) => self.eval(expr)?,
                     None => Value::None,
                 };
                 self.env.borrow_mut().define(name.clone(), value);
             }
-            Decl::Statement(stmt) => self.exec(stmt)?,
+            Decl::Statement(stmt) => return self.exec(stmt),
         }
-        Ok(())
+        Ok(Signal::None)
     }
 
-    fn exec(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
+    fn exec(&mut self, stmt: &Stmt) -> Result<Signal, RuntimeError> {
         match stmt {
-            Stmt::Expression(ref expr) => {
-                println!("{:?}", self.eval(expr)?);
+            Stmt::Return(expr, _) => {
+                let value = match expr {
+                    Some(e) => self.eval(e)?,
+                    None => Value::None,
+                };
+                return Ok(Signal::Ret(value));
             }
-            Stmt::Assignment(ref name, ref expr, ref line) => {
+            Stmt::Assignment(name, expr, line) => {
                 let value = self.eval(expr)?;
                 if !self.env.borrow_mut().assign(name.clone(), value) {
                     return Err(RuntimeError::UndefinedVar(*line, name.clone()));
                 }
             }
-            Stmt::Block(decls) => self.exec_block(decls, Env::enclosing(Rc::clone(&self.env)))?,
+            Stmt::Expression(expr) => {
+                println!("{:?}", self.eval(expr)?);
+            }
+            Stmt::Block(decls) => return self.exec_block(decls, Env::enclosing(&self.env)),
         }
-        Ok(())
+        Ok(Signal::None)
     }
 
-    fn exec_block(&mut self, decls: &[Decl], env: Env) -> Result<(), RuntimeError> {
+    pub fn exec_block(&mut self, decls: &[Decl], env: Env) -> Result<Signal, RuntimeError> {
         let prev = Rc::clone(&self.env);
         self.env = Rc::new(RefCell::new(env));
 
-        let mut res = Ok(());
+        let mut res = Ok(Signal::None);
         for decl in decls {
             res = self.declare(decl);
             if res.is_err() {
+                break;
+            }
+            if let Ok(Signal::Ret(_)) = res {
                 break;
             }
         }

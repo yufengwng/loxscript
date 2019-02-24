@@ -1,16 +1,18 @@
 use std::error;
 use std::fmt;
+use std::rc::Rc;
 
 use crate::ast::{BinOp, LogOp, UniOp};
 use crate::ast::{Decl, Expr, Primitive, Stmt};
 use crate::ast::{Span, Token};
 
-const MAX_ARGS: usize = 8;
+const MAX_FN_ARITY: usize = 8;
 
 #[derive(Debug)]
 enum ParseError {
     InvalidAssignTarget(Span),
     MaxArgs(Span),
+    MaxParams(Span),
     MissingExpr(Span),
     NotConsumed(Span, &'static str),
 }
@@ -26,7 +28,12 @@ impl fmt::Display for ParseError {
             ParseError::MaxArgs(span) => write!(
                 f,
                 "[line {}] parse error at '{}': cannot have more than {} arguments",
-                span.line, span.token, MAX_ARGS
+                span.line, span.token, MAX_FN_ARITY
+            ),
+            ParseError::MaxParams(span) => write!(
+                f,
+                "[line {}] parse error at '{}': cannot have more than {} parameters",
+                span.line, span.token, MAX_FN_ARITY
             ),
             ParseError::MissingExpr(span) => write!(
                 f,
@@ -84,14 +91,41 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Result<Decl, ParseError> {
+        if self.matches(&Token::Fun) {
+            return self.fun_declaration();
+        }
         if self.matches(&Token::Let) {
             return self.let_declaration();
         }
         self.statement().map(Decl::Statement)
     }
 
+    fn fun_declaration(&mut self) -> Result<Decl, ParseError> {
+        let (name, _) = self.consume_ident("expected function name")?;
+        self.consume(&Token::Lparen, "expected '(' after function name")?;
+
+        let mut params = Vec::new();
+        if !self.check(&Token::Rparen) {
+            let (param, _) = self.consume_ident("expected parameter name")?;
+            params.push(param);
+            while self.matches(&Token::Comma) {
+                if params.len() >= MAX_FN_ARITY {
+                    self.log_err(ParseError::MaxParams(self.peek().clone()));
+                }
+                let (param, _) = self.consume_ident("expected parameter name")?;
+                params.push(param);
+            }
+        }
+
+        self.consume(&Token::Rparen, "expected ')' after parameters")?;
+        self.consume(&Token::Lbrace, "expected '{' before function body")?;
+
+        let body = self.block()?;
+        Ok(Decl::Function(name, params, Rc::new(body)))
+    }
+
     fn let_declaration(&mut self) -> Result<Decl, ParseError> {
-        let (name, line) = self.consume_ident("expected variable name")?;
+        let (name, _) = self.consume_ident("expected variable name")?;
 
         let init = if self.matches(&Token::Eq) {
             Some(self.expression()?)
@@ -100,10 +134,13 @@ impl Parser {
         };
 
         self.consume(&Token::Semi, "expected ';' after variable declaration")?;
-        Ok(Decl::Let(name, init, line))
+        Ok(Decl::Let(name, init))
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
+        if self.check(&Token::Ret) {
+            return self.return_statement();
+        }
         if self.matches(&Token::Lbrace) {
             return Ok(Stmt::Block(self.block()?));
         }
@@ -124,6 +161,17 @@ impl Parser {
         }
         self.consume(&Token::Semi, "expected ';' after expression")?;
         Ok(Stmt::Expression(expr))
+    }
+
+    fn return_statement(&mut self) -> Result<Stmt, ParseError> {
+        let line = self.advance().line;
+        let value = if !self.check(&Token::Semi) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+        self.consume(&Token::Semi, "expected ';' after return value")?;
+        Ok(Stmt::Return(value, line))
     }
 
     fn block(&mut self) -> Result<Vec<Decl>, ParseError> {
@@ -231,7 +279,7 @@ impl Parser {
         if !self.check(&Token::Rparen) {
             args.push(self.expression()?);
             while self.matches(&Token::Comma) {
-                if args.len() >= MAX_ARGS {
+                if args.len() >= MAX_FN_ARITY {
                     self.log_err(ParseError::MaxArgs(self.peek().clone()));
                 }
                 args.push(self.expression()?);

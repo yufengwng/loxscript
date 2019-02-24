@@ -2,12 +2,16 @@ grammar loxscript;
 
 program     : declaration* EOF ;
 
-declaration : let_decl | statement ;
+declaration : fun_decl | let_decl | statement ;
+fun_decl    : 'fun' function ;
 let_decl    : 'let' IDENT ( '=' expression )? ';' ;
 
+function    : IDENT '(' parameters? ')' ;
+parameters  : IDENT ( ',' IDENT )* ;
 arguments   : expression ( ',' expression )* ;
 
-statement   : assign_stmt | expr_stmt | block ;
+statement   : return_stmt | assign_stmt | expr_stmt | block ;
+return_stmt : 'return' expression? ';' ;
 assign_stmt : IDENT '=' expression ';' ;
 expr_stmt   : expression ';' ;
 block       : '{' declaration* '}' ;

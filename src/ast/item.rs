@@ -1,5 +1,7 @@
 //! Module for higher-level syntactic language items.
 
+use std::rc::Rc;
+
 #[derive(Debug)]
 pub enum LogOp {
     And(usize),
@@ -48,6 +50,7 @@ pub enum Expr {
 
 /// Language items for control flow or side effects.
 pub enum Stmt {
+    Return(Option<Expr>, usize),
     Assignment(String, Expr, usize),
     Expression(Expr),
     Block(Vec<Decl>),
@@ -55,6 +58,7 @@ pub enum Stmt {
 
 /// Language items that introduce name bindings.
 pub enum Decl {
-    Let(String, Option<Expr>, usize),
+    Function(String, Vec<String>, Rc<Vec<Decl>>),
+    Let(String, Option<Expr>),
     Statement(Stmt),
 }
