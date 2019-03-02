@@ -50,6 +50,8 @@ pub enum Expr {
 
 /// Language items for control flow or side effects.
 pub enum Stmt {
+    If(Vec<(Expr, Vec<Decl>)>, Option<Vec<Decl>>),
+    While(Expr, Vec<Decl>),
     Return(Option<Expr>, usize),
     Assignment(String, Expr, usize),
     Expression(Expr),

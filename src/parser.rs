@@ -138,6 +138,15 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
+        if self.matches(&Token::For) {
+            return self.for_statement();
+        }
+        if self.matches(&Token::If) {
+            return self.if_statement();
+        }
+        if self.matches(&Token::While) {
+            return self.while_statement();
+        }
         if self.check(&Token::Ret) {
             return self.return_statement();
         }
@@ -146,21 +155,126 @@ impl Parser {
         }
 
         let expr = self.expression()?;
-        if !self.is_at_end() && self.peek().token == Token::Eq {
-            let equals = self.advance().clone();
-            let value = self.expression()?;
-            match expr {
-                Expr::Variable(name, line) => {
+        if self.check(&Token::Eq) {
+            self.finish_assignment(expr, true)
+        } else {
+            self.consume(&Token::Semi, "expected ';' after expression")?;
+            Ok(Stmt::Expression(expr))
+        }
+    }
+
+    fn finish_assignment(&mut self, expr: Expr, has_semi: bool) -> Result<Stmt, ParseError> {
+        let equals = self.advance().clone();
+        let value = self.expression()?;
+        match expr {
+            Expr::Variable(name, line) => {
+                if has_semi {
                     self.consume(&Token::Semi, "expected ';' after assignment")?;
-                    return Ok(Stmt::Assignment(name, value, line));
                 }
-                _ => {
-                    self.log_err(ParseError::InvalidAssignTarget(equals));
+                Ok(Stmt::Assignment(name, value, line))
+            }
+            _ => {
+                self.log_err(ParseError::InvalidAssignTarget(equals));
+                if has_semi {
+                    self.consume(&Token::Semi, "expected ';' after expression")?;
                 }
+                Ok(Stmt::Expression(expr))
             }
         }
-        self.consume(&Token::Semi, "expected ';' after expression")?;
-        Ok(Stmt::Expression(expr))
+    }
+
+    fn for_statement(&mut self) -> Result<Stmt, ParseError> {
+        let init = if self.matches(&Token::Semi) {
+            None
+        } else if self.matches(&Token::Let) {
+            Some(self.let_declaration()?)
+        } else {
+            let expr = self.expression()?;
+            if self.check(&Token::Eq) {
+                Some(Decl::Statement(self.finish_assignment(expr, true)?))
+            } else {
+                self.consume(&Token::Semi, "expected ';' after expression")?;
+                Some(Decl::Statement(Stmt::Expression(expr)))
+            }
+        };
+
+        let cond = if self.check(&Token::Semi) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+        let cond_tok = self.consume(&Token::Semi, "expected ';' after loop condition")?;
+
+        let incr = if self.check(&Token::Lbrace) {
+            None
+        } else {
+            let expr = self.expression()?;
+            if self.check(&Token::Eq) {
+                Some(self.finish_assignment(expr, false)?)
+            } else {
+                Some(Stmt::Expression(expr))
+            }
+        };
+
+        self.consume(&Token::Lbrace, "expected '{' after for clauses")?;
+        let body = self.block()?;
+
+        let loop_body = if let Some(stmt) = incr {
+            let mut wrapper = Vec::new();
+            wrapper.push(Decl::Statement(Stmt::Block(body)));
+            wrapper.push(Decl::Statement(stmt));
+            wrapper
+        } else {
+            body
+        };
+
+        let loop_cond = if let Some(expr) = cond {
+            expr
+        } else {
+            Expr::Literal(Primitive::Bool(true, cond_tok.line))
+        };
+
+        let loop_stmt = Stmt::While(loop_cond, loop_body);
+
+        let mut desugared = Vec::new();
+        if let Some(decl) = init {
+            desugared.push(decl);
+        }
+        desugared.push(Decl::Statement(loop_stmt));
+
+        Ok(Stmt::Block(desugared))
+    }
+
+    fn if_statement(&mut self) -> Result<Stmt, ParseError> {
+        let mut branches = Vec::new();
+
+        let cond = self.expression()?;
+        self.consume(&Token::Lbrace, "expected '{' after if condition")?;
+        let then = self.block()?;
+        branches.push((cond, then));
+
+        while self.matches(&Token::Elif) {
+            let elif_cond = self.expression()?;
+            self.consume(&Token::Lbrace, "expected '{' after elif condition")?;
+            let elif_then = self.block()?;
+            branches.push((elif_cond, elif_then));
+        }
+
+        let otherwise = if self.matches(&Token::Else) {
+            self.consume(&Token::Lbrace, "expected '{' after else")?;
+            Some(self.block()?)
+        } else {
+            None
+        };
+
+        Ok(Stmt::If(branches, otherwise))
+    }
+
+    fn while_statement(&mut self) -> Result<Stmt, ParseError> {
+        let cond = self.expression()?;
+        self.consume(&Token::Lbrace, "expected '{' after while condition")?;
+        let body = self.block()?;
+        Ok(Stmt::While(cond, body))
     }
 
     fn return_statement(&mut self) -> Result<Stmt, ParseError> {

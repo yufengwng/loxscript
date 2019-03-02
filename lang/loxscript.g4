@@ -10,10 +10,17 @@ function    : IDENT '(' parameters? ')' ;
 parameters  : IDENT ( ',' IDENT )* ;
 arguments   : expression ( ',' expression )* ;
 
-statement   : return_stmt | assign_stmt | expr_stmt | block ;
-return_stmt : 'return' expression? ';' ;
-assign_stmt : IDENT '=' expression ';' ;
+statement   : for_stmt | if_stmt | while_stmt | return_stmt | assign_stmt | expr_stmt | block ;
+assign_stmt : assign ';' ;
 expr_stmt   : expression ';' ;
+for_stmt    : 'for' ( let_decl | assign_stmt | expr_stmt | ';' )
+            | expression? ';'
+            | ( assign | expression )?
+            | block ;
+if_stmt     : 'if' expression block ( 'elif' expression block )* ( 'else' block )? ;
+return_stmt : 'return' expression? ';' ;
+while_stmt  : 'while' expression block ;
+assign      : IDENT '=' expression ;
 block       : '{' declaration* '}' ;
 
 expression  : logical_or ;

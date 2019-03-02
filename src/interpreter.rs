@@ -132,6 +132,24 @@ impl Interpreter {
 
     fn exec(&mut self, stmt: &Stmt) -> Result<Signal, RuntimeError> {
         match stmt {
+            Stmt::If(branches, otherwise) => {
+                for (cond, then) in branches {
+                    if self.eval(cond)?.is_truthy() {
+                        return self.exec_block(then, Env::enclosing(&self.env));
+                    }
+                }
+                if let Some(body) = otherwise {
+                    return self.exec_block(body, Env::enclosing(&self.env));
+                }
+            }
+            Stmt::While(cond, body) => {
+                while self.eval(cond)?.is_truthy() {
+                    let res = self.exec_block(&body, Env::enclosing(&self.env))?;
+                    if let Signal::Ret(_) = res {
+                        return Ok(res);
+                    }
+                }
+            }
             Stmt::Return(expr, _) => {
                 let value = match expr {
                     Some(e) => self.eval(e)?,
@@ -238,7 +256,7 @@ impl Interpreter {
                     BinOp::NotEq(_) => Value::Bool(lval != rval),
                 }
             }
-            Expr::Logical(ref lhs, ref op, ref rhs) => {
+            Expr::Logical(lhs, op, rhs) => {
                 let lval = self.eval(lhs)?;
                 match op {
                     LogOp::And(_) => {
