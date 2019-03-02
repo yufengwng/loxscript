@@ -45,10 +45,9 @@ impl Callable for Function {
             env.define(param.to_owned(), arg);
         });
         let sig = interpreter.exec_block(&self.body, env)?;
-        if let Signal::Ret(value) = sig {
-            Ok(value)
-        } else {
-            Ok(Value::None)
+        match sig {
+            Signal::Ret(value) => Ok(value),
+            _ => Ok(Value::None),
         }
     }
 

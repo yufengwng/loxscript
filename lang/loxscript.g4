@@ -10,8 +10,13 @@ function    : IDENT '(' parameters? ')' ;
 parameters  : IDENT ( ',' IDENT )* ;
 arguments   : expression ( ',' expression )* ;
 
-statement   : for_stmt | if_stmt | while_stmt | return_stmt | assign_stmt | expr_stmt | block ;
+statement   : for_stmt | if_stmt | while_stmt
+            | break_stmt | cont_stmt | return_stmt
+            | assign_stmt | expr_stmt
+            | block ;
 assign_stmt : assign ';' ;
+break_stmt  : 'break' ';' ;
+cont_stmt   : 'continue' ';' ;
 expr_stmt   : expression ';' ;
 for_stmt    : 'for' ( let_decl | assign_stmt | expr_stmt | ';' )
             | expression? ';'

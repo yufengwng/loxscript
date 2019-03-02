@@ -80,6 +80,8 @@ impl fmt::Display for Print {
 
 pub enum Signal {
     Ret(Value),
+    Break,
+    Cont,
     None,
 }
 
@@ -101,6 +103,34 @@ impl Interpreter {
         if let Err(err) = self.interpret(program) {
             eprintln!("{}", err);
         }
+    }
+
+    pub fn exec_block(&mut self, decls: &[Decl], env: Env) -> Result<Signal, RuntimeError> {
+        self.with_scope(env, |this| {
+            for decl in decls {
+                let sig = this.declare(decl)?;
+                match sig {
+                    Signal::Ret(_) => return Ok(sig),
+                    Signal::Break => return Ok(sig),
+                    Signal::Cont => return Ok(sig),
+                    Signal::None => continue,
+                }
+            }
+            Ok(Signal::None)
+        })
+    }
+
+    fn with_scope<F>(&mut self, env: Env, mut f: F) -> Result<Signal, RuntimeError>
+    where
+        F: FnMut(&mut Self) -> Result<Signal, RuntimeError>,
+    {
+        let prev = Rc::clone(&self.env);
+        self.env = Rc::new(RefCell::new(env));
+
+        let res = f(self);
+
+        self.env = prev;
+        res
     }
 
     fn interpret(&mut self, program: &[Decl]) -> Result<(), RuntimeError> {
@@ -132,6 +162,29 @@ impl Interpreter {
 
     fn exec(&mut self, stmt: &Stmt) -> Result<Signal, RuntimeError> {
         match stmt {
+            Stmt::For(init, cond, post, body) => {
+                return self.with_scope(Env::enclosing(&self.env), |this| {
+                    if let Some(decl) = init {
+                        this.declare(decl)?;
+                    }
+
+                    while this.eval(cond)?.is_truthy() {
+                        let sig = this.exec_block(body, Env::enclosing(&this.env))?;
+                        match sig {
+                            Signal::Ret(_) => return Ok(sig),
+                            Signal::Break => break,
+                            Signal::Cont => {}
+                            Signal::None => {}
+                        }
+
+                        if let Some(stmt) = post {
+                            this.exec(stmt)?;
+                        }
+                    }
+
+                    Ok(Signal::None)
+                });
+            }
             Stmt::If(branches, otherwise) => {
                 for (cond, then) in branches {
                     if self.eval(cond)?.is_truthy() {
@@ -144,11 +197,20 @@ impl Interpreter {
             }
             Stmt::While(cond, body) => {
                 while self.eval(cond)?.is_truthy() {
-                    let res = self.exec_block(&body, Env::enclosing(&self.env))?;
-                    if let Signal::Ret(_) = res {
-                        return Ok(res);
+                    let sig = self.exec_block(&body, Env::enclosing(&self.env))?;
+                    match sig {
+                        Signal::Ret(_) => return Ok(sig),
+                        Signal::Break => return Ok(Signal::None),
+                        Signal::Cont => continue,
+                        Signal::None => continue,
                     }
                 }
+            }
+            Stmt::Break(_) => {
+                return Ok(Signal::Break);
+            }
+            Stmt::Continue(_) => {
+                return Ok(Signal::Cont);
             }
             Stmt::Return(expr, _) => {
                 let value = match expr {
@@ -169,25 +231,6 @@ impl Interpreter {
             Stmt::Block(decls) => return self.exec_block(decls, Env::enclosing(&self.env)),
         }
         Ok(Signal::None)
-    }
-
-    pub fn exec_block(&mut self, decls: &[Decl], env: Env) -> Result<Signal, RuntimeError> {
-        let prev = Rc::clone(&self.env);
-        self.env = Rc::new(RefCell::new(env));
-
-        let mut res = Ok(Signal::None);
-        for decl in decls {
-            res = self.declare(decl);
-            if res.is_err() {
-                break;
-            }
-            if let Ok(Signal::Ret(_)) = res {
-                break;
-            }
-        }
-
-        self.env = prev;
-        res
     }
 
     fn eval(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
