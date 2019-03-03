@@ -99,9 +99,12 @@ impl Interpreter {
         }
     }
 
-    pub fn run(&mut self, program: &[Decl]) {
+    pub fn run(&mut self, program: &[Decl]) -> bool {
         if let Err(err) = self.interpret(program) {
             eprintln!("{}", err);
+            true
+        } else {
+            false
         }
     }
 
