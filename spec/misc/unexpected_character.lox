@@ -1,0 +1,3 @@
+#!! [line 3] parse error: unrecognized character '|'
+#!! [line 3] parse error at 'b': expected ')' after arguments
+foo(a | b);
