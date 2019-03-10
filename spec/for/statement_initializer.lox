@@ -1,0 +1,3 @@
+#!! [line 3] parse error at '{': expected an expression
+#!! [line 3] parse error at '{': expected ';' after assignment
+for {}; a < 2; a = a + 1 {}

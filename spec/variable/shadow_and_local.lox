@@ -1,0 +1,8 @@
+{
+  let a = "outer";
+  {
+    print(a); #=> outer
+    let a = "inner";
+    print(a); #=> inner
+  }
+}

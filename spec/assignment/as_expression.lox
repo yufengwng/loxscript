@@ -1,0 +1,2 @@
+let a = "before";
+print(a = "bad"); #!! [line 2] parse error at '=': expected ')' after arguments

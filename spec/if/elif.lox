@@ -1,0 +1,3 @@
+# Evaluate the 'elif' expression if the condition is true.
+if true { print("good"); } elif true { print("bad"); }  #=> good
+if false { print("bad"); } elif true { print("good"); } #=> good

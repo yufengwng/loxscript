@@ -1,0 +1,2 @@
+#!! [line 2] parse error at '.': expected an expression
+.123;

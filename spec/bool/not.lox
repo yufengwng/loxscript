@@ -1,0 +1,3 @@
+print(not true);     #=> false
+print(not false);    #=> true
+print(not not true); #=> true

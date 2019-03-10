@@ -1,0 +1,1 @@
+true + 123; #@! [line 1] runtime error: operands must be two numbers or two strings

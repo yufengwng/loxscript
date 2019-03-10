@@ -1,0 +1,13 @@
+print(not true);     #=> false
+print(not false);    #=> true
+print(not not true); #=> true
+
+print(not 123);      #=> false
+print(not 0);        #=> false
+
+print(not none);     #=> true
+
+print(not "");       #=> false
+
+fun foo() {}
+print(not foo);      #=> false

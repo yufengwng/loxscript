@@ -1,0 +1,3 @@
+{
+  print(not_defined); #@! [line 2] runtime error: undefined variable 'not_defined'
+}

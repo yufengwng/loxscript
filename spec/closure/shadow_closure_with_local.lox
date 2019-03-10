@@ -1,0 +1,12 @@
+{
+  let foo = "closure";
+  fun f() {
+    {
+      print(foo); #=> closure
+      let foo = "shadow";
+      print(foo); #=> shadow
+    }
+    print(foo); #=> closure
+  }
+  f();
+}

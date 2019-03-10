@@ -1,0 +1,7 @@
+{
+  let a = "before";
+  print(a); #=> before
+
+  a = "after";
+  print(a); #=> after
+}

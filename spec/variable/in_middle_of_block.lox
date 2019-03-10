@@ -1,0 +1,10 @@
+{
+  let a = "a";
+  print(a); #=> a
+  let b = a + " b";
+  print(b); #=> a b
+  let c = a + " c";
+  print(c); #=> a c
+  let d = b + " d";
+  print(d); #=> a b d
+}

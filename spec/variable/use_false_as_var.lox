@@ -1,0 +1,2 @@
+#!! [line 2] parse error at 'false': expected variable name
+let false = "value";

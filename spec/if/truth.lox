@@ -1,0 +1,8 @@
+# False and none are false.
+if false { print("bad"); } else { print("false"); }  #=> false
+if none { print("bad"); } else { print("none"); }    #=> none
+
+# Everything else is true.
+if true { print(true); }  #=> true
+if 0 { print(0); }        #=> 0
+if "" { print("empty"); } #=> empty

@@ -1,0 +1,5 @@
+print("(" + "" + ")");  #=> ()
+print("a string");      #=> a string
+
+# Non-ASCII.
+print("A~¶Þॐஃ"); #=> A~¶Þॐஃ

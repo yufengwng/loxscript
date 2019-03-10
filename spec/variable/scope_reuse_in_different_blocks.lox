@@ -1,0 +1,9 @@
+{
+  let a = "first";
+  print(a); #=> first
+}
+
+{
+  let a = "second";
+  print(a); #=> second
+}

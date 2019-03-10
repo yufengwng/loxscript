@@ -1,0 +1,3 @@
+# Evaluate the 'then' expression if the condition is true.
+if true { print("good"); } #=> good
+if false { print("bad"); }

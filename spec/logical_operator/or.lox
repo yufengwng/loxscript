@@ -1,0 +1,15 @@
+# Note: These tests implicitly depend on ints being truthy.
+
+# Return the first true argument.
+print(1 or true);              #=> 1
+print(false or 1);             #=> 1
+print(false or false or true); #=> true
+
+# Return the last argument if all are false.
+print(false or false);          #=> false
+print(false or false or false); #=> false
+
+# Short-circuit at the first true argument.
+let a = "before";
+a = false or true or "bad";
+print(a); #=> true
