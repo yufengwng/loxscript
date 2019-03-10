@@ -193,7 +193,9 @@ impl Parser {
         } else {
             let expr = self.expression()?;
             if self.check(&Token::Eq) {
-                Some(Box::new(Decl::Statement(self.finish_assignment(expr, true)?)))
+                Some(Box::new(Decl::Statement(
+                    self.finish_assignment(expr, true)?,
+                )))
             } else {
                 self.consume(&Token::Semi, "expected ';' after expression")?;
                 Some(Box::new(Decl::Statement(Stmt::Expression(expr))))
@@ -572,7 +574,28 @@ impl Parser {
     }
 
     fn synchronize(&mut self) {
-        self.advance();
+        let mut curr = self.advance();
+        if curr.token == Token::Semi {
+            return;
+        }
+        while !self.is_at_end() {
+            curr = self.peek();
+            match curr.token {
+                Token::Class
+                | Token::Fun
+                | Token::Let
+                | Token::For
+                | Token::If
+                | Token::While
+                | Token::Ret => return,
+                Token::Semi => {
+                    self.advance();
+                    return;
+                }
+                _ => {}
+            }
+            self.advance();
+        }
     }
 }
 

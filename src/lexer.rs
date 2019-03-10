@@ -196,7 +196,7 @@ impl Lexer {
         let start = self.idx;
         while !self.is_at_end() && self.peek() != '"' {
             let next = self.advance();
-            if next == '\n' {
+            if next == '\n' && !self.is_at_end() {
                 self.advance_line();
             }
         }

@@ -229,7 +229,7 @@ impl Interpreter {
                 }
             }
             Stmt::Expression(expr) => {
-                println!("{:?}", self.eval(expr)?);
+                self.eval(expr)?;
             }
             Stmt::Block(decls) => return self.exec_block(decls, Env::enclosing(&self.env)),
         }
