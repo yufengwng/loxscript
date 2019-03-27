@@ -3,5 +3,5 @@
 mod item;
 mod token;
 
-pub use self::item::{BinOp, Decl, Expr, LogOp, Primitive, Stmt, UniOp};
+pub use self::item::{BinOp, Decl, Expr, LogOp, Primitive, Stmt, UniOp, Var};
 pub use self::token::{Span, Token};

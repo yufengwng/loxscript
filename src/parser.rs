@@ -3,7 +3,7 @@ use std::fmt;
 use std::rc::Rc;
 
 use crate::ast::{BinOp, LogOp, UniOp};
-use crate::ast::{Decl, Expr, Primitive, Stmt};
+use crate::ast::{Decl, Expr, Primitive, Stmt, Var};
 use crate::ast::{Span, Token};
 
 const MAX_FN_ARITY: usize = 8;
@@ -60,6 +60,7 @@ pub struct Parser {
     spans: Vec<Span>,
     idx: usize,
     had_error: bool,
+    var_id: usize,
 }
 
 impl Parser {
@@ -68,6 +69,7 @@ impl Parser {
             spans,
             idx: 0,
             had_error: false,
+            var_id: 0,
         }
     }
 
@@ -169,11 +171,11 @@ impl Parser {
         let equals = self.advance().clone();
         let value = self.expression()?;
         match expr {
-            Expr::Variable(name, line) => {
+            Expr::Variable(var, line) => {
                 if has_semi {
                     self.consume(&Token::Semi, "expected ';' after assignment")?;
                 }
-                Ok(Stmt::Assignment(name, value, line))
+                Ok(Stmt::Assignment(var, value, line))
             }
             _ => {
                 self.log_err(ParseError::InvalidAssignTarget(equals));
@@ -387,26 +389,32 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Result<Expr, ParseError> {
-        let curr = self.peek();
+        let curr = self.peek().clone();
 
-        let expr = match &curr.token {
+        let expr = match curr.token {
             Token::None => Expr::Literal(Primitive::None(curr.line)),
             Token::True => Expr::Literal(Primitive::Bool(true, curr.line)),
             Token::False => Expr::Literal(Primitive::Bool(false, curr.line)),
-            Token::Num(n) => Expr::Literal(Primitive::Num(*n, curr.line)),
-            Token::Str(s) => Expr::Literal(Primitive::Str(s.clone(), curr.line)),
-            Token::Ident(s) => Expr::Variable(s.clone(), curr.line),
+            Token::Num(n) => Expr::Literal(Primitive::Num(n, curr.line)),
+            Token::Str(s) => Expr::Literal(Primitive::Str(s, curr.line)),
+            Token::Ident(s) => Expr::Variable(Var::new(self.next_var_id(), s), curr.line),
             Token::Lparen => {
                 self.advance();
                 let expr = self.expression()?;
                 self.consume(&Token::Rparen, "expected ')' after expression")?;
                 return Ok(Expr::Group(Box::new(expr)));
             }
-            _ => return Err(ParseError::MissingExpr(curr.clone())),
+            _ => return Err(ParseError::MissingExpr(curr)),
         };
 
         self.advance();
         Ok(expr)
+    }
+
+    fn next_var_id(&mut self) -> usize {
+        let id = self.var_id;
+        self.var_id += 1;
+        id
     }
 
     fn is_at_end(&self) -> bool {

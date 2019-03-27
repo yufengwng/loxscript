@@ -37,6 +37,18 @@ pub enum Primitive {
     Str(String, usize),
 }
 
+#[derive(Debug)]
+pub struct Var {
+    pub id: usize,
+    pub name: String,
+}
+
+impl Var {
+    pub fn new(id: usize, name: String) -> Self {
+        Self { id, name }
+    }
+}
+
 /// Language items that evaluate to values.
 pub enum Expr {
     Logical(Box<Expr>, LogOp, Box<Expr>),
@@ -44,7 +56,7 @@ pub enum Expr {
     Unary(UniOp, Box<Expr>),
     Call(Box<Expr>, Vec<Expr>, usize),
     Literal(Primitive),
-    Variable(String, usize),
+    Variable(Var, usize),
     Group(Box<Expr>),
 }
 
@@ -56,7 +68,7 @@ pub enum Stmt {
     Break(usize),
     Continue(usize),
     Return(Option<Expr>, usize),
-    Assignment(String, Expr, usize),
+    Assignment(Var, Expr, usize),
     Expression(Expr),
     Block(Vec<Decl>),
 }

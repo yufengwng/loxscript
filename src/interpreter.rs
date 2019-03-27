@@ -222,10 +222,10 @@ impl Interpreter {
                 };
                 return Ok(Signal::Ret(value));
             }
-            Stmt::Assignment(name, expr, line) => {
+            Stmt::Assignment(var, expr, line) => {
                 let value = self.eval(expr)?;
-                if !self.env.borrow_mut().assign(name.clone(), value) {
-                    return Err(RuntimeError::UndefinedVar(*line, name.clone()));
+                if !self.env.borrow_mut().assign(var.name.clone(), value) {
+                    return Err(RuntimeError::UndefinedVar(*line, var.name.clone()));
                 }
             }
             Stmt::Expression(expr) => {
@@ -342,11 +342,11 @@ impl Interpreter {
 
                 fun.call(self, args)?
             }
-            Expr::Variable(name, line) => self
+            Expr::Variable(var, line) => self
                 .env
                 .borrow()
-                .search(name)
-                .ok_or_else(|| RuntimeError::UndefinedVar(*line, name.clone()))?,
+                .search(&var.name)
+                .ok_or_else(|| RuntimeError::UndefinedVar(*line, var.name.clone()))?,
             Expr::Group(ref inner) => self.eval(inner)?,
         })
     }
