@@ -17,6 +17,8 @@ enum ParseError {
     NotConsumed(Span, &'static str),
 }
 
+impl error::Error for ParseError {}
+
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -49,9 +51,7 @@ impl fmt::Display for ParseError {
     }
 }
 
-impl error::Error for ParseError {}
-
-pub struct ParseReport {
+pub struct ParsedProgram {
     pub decls: Vec<Decl>,
     pub had_error: bool,
 }
@@ -73,7 +73,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(mut self) -> ParseReport {
+    pub fn parse(mut self) -> ParsedProgram {
         let mut decls = Vec::new();
 
         while !self.is_at_end() {
@@ -86,7 +86,7 @@ impl Parser {
             }
         }
 
-        ParseReport {
+        ParsedProgram {
             decls,
             had_error: self.had_error,
         }

@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use crate::ast::{BinOp, LogOp, UniOp};
 use crate::ast::{Decl, Expr, Primitive, Stmt};
+use crate::resolver::ResolvedProgram;
 use crate::runtime::Env;
 use crate::runtime::Value;
 use crate::runtime::{Callable, Function};
@@ -99,8 +100,8 @@ impl Interpreter {
         }
     }
 
-    pub fn run(&mut self, program: &[Decl]) -> bool {
-        if let Err(err) = self.interpret(program) {
+    pub fn run(&mut self, program: &ResolvedProgram) -> bool {
+        if let Err(err) = self.interpret(&program.decls) {
             eprintln!("{}", err);
             true
         } else {

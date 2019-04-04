@@ -1,7 +1,7 @@
 use crate::ast::Span;
 use crate::ast::Token;
 
-pub struct ScanReport {
+pub struct LexedProgram {
     pub spans: Vec<Span>,
     pub had_error: bool,
 }
@@ -23,7 +23,7 @@ impl Lexer {
         }
     }
 
-    pub fn scan(mut self) -> ScanReport {
+    pub fn scan(mut self) -> LexedProgram {
         let mut spans: Vec<Span> = Vec::new();
 
         while !self.is_at_end() {
@@ -34,7 +34,7 @@ impl Lexer {
         }
 
         spans.push(Span::new(Token::EOF, self.line));
-        ScanReport {
+        LexedProgram {
             spans,
             had_error: self.had_error,
         }
