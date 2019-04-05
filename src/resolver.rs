@@ -6,7 +6,9 @@ use crate::ast::{Decl, Expr, Stmt};
 
 #[derive(Debug)]
 enum ResolveError {
+    AlreadyDeclared(usize, String),
     OwnInitializer(usize, String),
+    TopReturn(usize),
 }
 
 impl error::Error for ResolveError {}
@@ -14,11 +16,17 @@ impl error::Error for ResolveError {}
 impl fmt::Display for ResolveError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            ResolveError::AlreadyDeclared(line, name) => write!(
+                f,
+                "[line {}] resolve error at '{}': variable with this name already declared in this scope",
+                line, name
+            ),
             ResolveError::OwnInitializer(line, name) => write!(
                 f,
                 "[line {}] resolve error at '{}': cannot read local variable in its own initializer",
                 line, name
             ),
+            ResolveError::TopReturn(line) => write!(f, "[line {}] resolve error at 'return': cannot return from top-level code", line),
         }
     }
 }
@@ -29,11 +37,23 @@ pub struct ResolvedProgram {
     pub had_error: bool,
 }
 
-#[derive(Default)]
+#[derive(Clone, PartialEq)]
+enum FunType {
+    None,
+    Function,
+}
+
 pub struct Resolver {
     scopes: Vec<HashMap<String, bool>>,
     hops: HashMap<usize, usize>,
     had_error: bool,
+    curr_fun: FunType,
+}
+
+impl Default for Resolver {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Resolver {
@@ -42,6 +62,7 @@ impl Resolver {
             scopes: Vec::new(),
             hops: HashMap::new(),
             had_error: false,
+            curr_fun: FunType::None,
         }
     }
 
@@ -62,10 +83,15 @@ impl Resolver {
         self.scopes.pop();
     }
 
-    fn declare(&mut self, name: &str) {
-        self.scopes
+    fn declare(&mut self, name: &str, line: usize) {
+        if self
+            .scopes
             .last_mut()
-            .and_then(|map| map.insert(name.to_owned(), false));
+            .and_then(|map| map.insert(name.to_owned(), false))
+            .is_some()
+        {
+            self.log_err(ResolveError::AlreadyDeclared(line, name.to_owned()));
+        }
     }
 
     fn define(&mut self, name: &str) {
@@ -94,14 +120,19 @@ impl Resolver {
         }
     }
 
-    fn resolve_function(&mut self, params: &[String], body: &[Decl]) {
+    fn resolve_function(&mut self, params: &[(String, usize)], body: &[Decl], kind: FunType) {
+        let prev = self.curr_fun.clone();
+        self.curr_fun = kind;
+
         self.begin_scope();
-        for param in params {
-            self.declare(param);
+        for (param, line) in params {
+            self.declare(param, *line);
             self.define(param);
         }
         self.resolve_all(body);
         self.end_scope();
+
+        self.curr_fun = prev;
     }
 
     fn resolve_block(&mut self, body: &[Decl]) {
@@ -112,13 +143,13 @@ impl Resolver {
 
     fn resolve_declare(&mut self, decl: &Decl) {
         match decl {
-            Decl::Function(name, params, body) => {
-                self.declare(name);
+            Decl::Function(name, params, body, line) => {
+                self.declare(name, *line);
                 self.define(name);
-                self.resolve_function(&params[..], body);
+                self.resolve_function(params, body, FunType::Function);
             }
-            Decl::Let(name, init) => {
-                self.declare(name);
+            Decl::Let(name, init, line) => {
+                self.declare(name, *line);
                 if let Some(expr) = init {
                     self.resolve_expression(expr);
                 }
@@ -157,7 +188,10 @@ impl Resolver {
             }
             Stmt::Break(_) => {}
             Stmt::Continue(_) => {}
-            Stmt::Return(expr, _) => {
+            Stmt::Return(expr, line) => {
+                if self.curr_fun == FunType::None {
+                    self.log_err(ResolveError::TopReturn(*line));
+                }
                 if let Some(e) = expr {
                     self.resolve_expression(e);
                 }

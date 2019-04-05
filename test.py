@@ -16,7 +16,7 @@ TEST_DIR = 'spec'
 OUTPUT_EXPECT = re.compile(r'#=> (.*)')
 PARSE_ERROR_EXPECT = re.compile(r'#!! (.+)')
 RUNTIME_ERROR_EXPECT = re.compile(r'#@! (.+)')
-SYNTAX_ERROR_RE = re.compile(r'\[line \d+\] parse error.+')
+SYNTAX_ERROR_RE = re.compile(r'\[line \d+\] (parse|resolve) error.+')
 STACK_TRACE_RE = re.compile(r'\[line (\d+)\]')
 
 EX_DATAERR = 65

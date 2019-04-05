@@ -64,4 +64,38 @@ impl Env {
 
         false
     }
+
+    pub fn get_at(&self, distance: usize, name: &str) -> Option<Value> {
+        if distance == 0 {
+            return self.values.get(name).cloned();
+        }
+        self.find_inner_at(distance)
+            .and_then(|ptr| ptr.borrow().values.get(name).cloned())
+    }
+
+    pub fn assign_at(&mut self, distance: usize, name: String, value: Value) -> bool {
+        if distance == 0 {
+            match self.values.insert(name, value) {
+                Some(_) => return true,
+                None => return false,
+            }
+        }
+        self.find_inner_at(distance)
+            .and_then(|ptr| ptr.borrow_mut().values.insert(name, value))
+            .is_some()
+    }
+
+    fn find_inner_at(&self, distance: usize) -> Option<Rc<RefCell<Self>>> {
+        let mut i = 1;
+        let mut curr = self.inner.as_ref().cloned();
+        while i < distance {
+            if let Some(ptr) = curr {
+                curr = ptr.borrow().inner.as_ref().cloned();
+                i += 1;
+            } else {
+                break;
+            }
+        }
+        curr
+    }
 }

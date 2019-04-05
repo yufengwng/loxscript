@@ -75,7 +75,7 @@ pub enum Stmt {
 
 /// Language items that introduce name bindings.
 pub enum Decl {
-    Function(String, Vec<String>, Rc<Vec<Decl>>),
-    Let(String, Option<Expr>),
+    Function(String, Vec<(String, usize)>, Rc<Vec<Decl>>, usize),
+    Let(String, Option<Expr>, usize),
     Statement(Stmt),
 }

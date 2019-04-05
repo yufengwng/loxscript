@@ -56,20 +56,37 @@ pub struct ParsedProgram {
     pub had_error: bool,
 }
 
-pub struct Parser {
-    spans: Vec<Span>,
-    idx: usize,
-    had_error: bool,
+#[derive(Default)]
+pub struct IdGenerator {
     var_id: usize,
 }
 
-impl Parser {
-    pub fn new(spans: Vec<Span>) -> Self {
+impl IdGenerator {
+    pub fn new() -> Self {
+        Self { var_id: 0 }
+    }
+
+    pub fn next_id(&mut self) -> usize {
+        let id = self.var_id;
+        self.var_id += 1;
+        id
+    }
+}
+
+pub struct Parser<'a> {
+    spans: Vec<Span>,
+    idx: usize,
+    had_error: bool,
+    id_gen: &'a mut IdGenerator,
+}
+
+impl<'a> Parser<'a> {
+    pub fn new(id_gen: &'a mut IdGenerator, spans: Vec<Span>) -> Self {
         Self {
             spans,
             idx: 0,
             had_error: false,
-            var_id: 0,
+            id_gen,
         }
     }
 
@@ -103,18 +120,18 @@ impl Parser {
     }
 
     fn fun_declaration(&mut self) -> Result<Decl, ParseError> {
-        let (name, _) = self.consume_ident("expected function name")?;
+        let (name, line) = self.consume_ident("expected function name")?;
         self.consume(&Token::Lparen, "expected '(' after function name")?;
 
         let mut params = Vec::new();
         if !self.check(&Token::Rparen) {
-            let (param, _) = self.consume_ident("expected parameter name")?;
+            let param = self.consume_ident("expected parameter name")?;
             params.push(param);
             while self.matches(&Token::Comma) {
                 if params.len() >= MAX_FN_ARITY {
                     self.log_err(ParseError::MaxParams(self.peek().clone()));
                 }
-                let (param, _) = self.consume_ident("expected parameter name")?;
+                let param = self.consume_ident("expected parameter name")?;
                 params.push(param);
             }
         }
@@ -123,11 +140,11 @@ impl Parser {
         self.consume(&Token::Lbrace, "expected '{' before function body")?;
 
         let body = self.block()?;
-        Ok(Decl::Function(name, params, Rc::new(body)))
+        Ok(Decl::Function(name, params, Rc::new(body), line))
     }
 
     fn let_declaration(&mut self) -> Result<Decl, ParseError> {
-        let (name, _) = self.consume_ident("expected variable name")?;
+        let (name, line) = self.consume_ident("expected variable name")?;
 
         let init = if self.matches(&Token::Eq) {
             Some(self.expression()?)
@@ -136,7 +153,7 @@ impl Parser {
         };
 
         self.consume(&Token::Semi, "expected ';' after variable declaration")?;
-        Ok(Decl::Let(name, init))
+        Ok(Decl::Let(name, init, line))
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
@@ -397,7 +414,7 @@ impl Parser {
             Token::False => Expr::Literal(Primitive::Bool(false, curr.line)),
             Token::Num(n) => Expr::Literal(Primitive::Num(n, curr.line)),
             Token::Str(s) => Expr::Literal(Primitive::Str(s, curr.line)),
-            Token::Ident(s) => Expr::Variable(Var::new(self.next_var_id(), s), curr.line),
+            Token::Ident(s) => Expr::Variable(Var::new(self.id_gen.next_id(), s), curr.line),
             Token::Lparen => {
                 self.advance();
                 let expr = self.expression()?;
@@ -409,12 +426,6 @@ impl Parser {
 
         self.advance();
         Ok(expr)
-    }
-
-    fn next_var_id(&mut self) -> usize {
-        let id = self.var_id;
-        self.var_id += 1;
-        id
     }
 
     fn is_at_end(&self) -> bool {

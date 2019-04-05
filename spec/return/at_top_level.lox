@@ -1,0 +1,1 @@
+return "wat"; #!! [line 1] resolve error at 'return': cannot return from top-level code

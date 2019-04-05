@@ -17,7 +17,7 @@ pub trait Callable: fmt::Debug + fmt::Display {
 
 pub struct Function {
     name: String,
-    params: Vec<String>,
+    params: Vec<(String, usize)>,
     body: Rc<Vec<Decl>>,
     closure: Rc<RefCell<Env>>,
 }
@@ -25,7 +25,7 @@ pub struct Function {
 impl Function {
     pub fn new(
         name: String,
-        params: Vec<String>,
+        params: Vec<(String, usize)>,
         body: &Rc<Vec<Decl>>,
         env: &Rc<RefCell<Env>>,
     ) -> Self {
@@ -42,7 +42,7 @@ impl Callable for Function {
     fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value, RuntimeError> {
         let mut env = Env::enclosing(&self.closure);
         self.params.iter().zip(args).for_each(|(param, arg)| {
-            env.define(param.to_owned(), arg);
+            env.define(param.0.to_owned(), arg);
         });
         let sig = interpreter.exec_block(&self.body, env)?;
         match sig {

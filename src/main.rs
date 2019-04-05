@@ -6,7 +6,7 @@ use std::process;
 
 use loxscript::interpreter::Interpreter;
 use loxscript::lexer::Lexer;
-use loxscript::parser::Parser;
+use loxscript::parser::{IdGenerator, Parser};
 use loxscript::resolver::Resolver;
 
 static NAME: &str = "loxscript";
@@ -18,6 +18,7 @@ const EX_SOFTWARE: i32 = 70;
 
 fn main() {
     let mut interpreter = Interpreter::new();
+    let mut generator = IdGenerator::new();
 
     let args: Vec<String> = env::args().collect();
     if args.len() > 2 {
@@ -26,15 +27,15 @@ fn main() {
     }
 
     let status = if args.len() == 2 {
-        run_file(&mut interpreter, &args[1])
+        run_file(&mut interpreter, &mut generator, &args[1])
     } else {
-        run_repl(&mut interpreter)
+        run_repl(&mut interpreter, &mut generator)
     };
 
     process::exit(status);
 }
 
-fn run_file(interpreter: &mut Interpreter, path: &str) -> i32 {
+fn run_file(interpreter: &mut Interpreter, generator: &mut IdGenerator, path: &str) -> i32 {
     let source = match fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -43,7 +44,7 @@ fn run_file(interpreter: &mut Interpreter, path: &str) -> i32 {
         }
     };
 
-    let (parse_err, runtime_err) = run(interpreter, &source);
+    let (parse_err, runtime_err) = run(interpreter, generator, &source);
 
     if parse_err {
         EX_DATAERR
@@ -54,7 +55,7 @@ fn run_file(interpreter: &mut Interpreter, path: &str) -> i32 {
     }
 }
 
-fn run_repl(interpreter: &mut Interpreter) -> i32 {
+fn run_repl(interpreter: &mut Interpreter, generator: &mut IdGenerator) -> i32 {
     let mut line = String::new();
 
     loop {
@@ -82,17 +83,17 @@ fn run_repl(interpreter: &mut Interpreter) -> i32 {
             continue;
         }
 
-        run(interpreter, &line);
+        run(interpreter, generator, &line);
     }
 
     EX_OK
 }
 
-fn run(interpreter: &mut Interpreter, src: &str) -> (bool, bool) {
+fn run(interpreter: &mut Interpreter, generator: &mut IdGenerator, src: &str) -> (bool, bool) {
     let lexer = Lexer::new(src);
     let scanned = lexer.scan();
 
-    let parser = Parser::new(scanned.spans);
+    let parser = Parser::new(generator, scanned.spans);
     let parsed = parser.parse();
 
     let parse_err = scanned.had_error || parsed.had_error;
@@ -106,6 +107,6 @@ fn run(interpreter: &mut Interpreter, src: &str) -> (bool, bool) {
         return (true, false);
     }
 
-    let runtime_err = interpreter.run(&resolved);
+    let runtime_err = interpreter.run(resolved);
     (parse_err, runtime_err)
 }

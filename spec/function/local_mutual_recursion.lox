@@ -1,0 +1,12 @@
+{
+  fun is_even(n) {
+    if n == 0 { return true; }
+    return is_odd(n - 1); #@! [line 4] runtime error: undefined variable 'is_odd'
+  }
+
+  fun is_odd(n) {
+    return is_even(n - 1);
+  }
+
+  is_even(4);
+}

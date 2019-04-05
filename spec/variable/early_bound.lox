@@ -1,0 +1,10 @@
+let a = "outer";
+{
+  fun foo() {
+    print(a);
+  }
+
+  foo(); #=> outer
+  let a = "inner";
+  foo(); #=> outer
+}

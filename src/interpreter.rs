@@ -1,10 +1,11 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::error;
 use std::fmt;
 use std::rc::Rc;
 
 use crate::ast::{BinOp, LogOp, UniOp};
-use crate::ast::{Decl, Expr, Primitive, Stmt};
+use crate::ast::{Decl, Expr, Primitive, Stmt, Var};
 use crate::resolver::ResolvedProgram;
 use crate::runtime::Env;
 use crate::runtime::Value;
@@ -89,18 +90,24 @@ pub enum Signal {
 #[derive(Default)]
 pub struct Interpreter {
     env: Rc<RefCell<Env>>,
+    globals: Rc<RefCell<Env>>,
+    hops: HashMap<usize, usize>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
         let mut globals = Env::new();
         globals.define(Print.name(), Value::Callable(Rc::new(Print)));
+        let globals = Rc::new(RefCell::new(globals));
         Self {
-            env: Rc::new(RefCell::new(globals)),
+            env: Rc::clone(&globals),
+            globals: Rc::clone(&globals),
+            hops: HashMap::new(),
         }
     }
 
-    pub fn run(&mut self, program: &ResolvedProgram) -> bool {
+    pub fn run(&mut self, program: ResolvedProgram) -> bool {
+        self.hops.extend(program.hops);
         if let Err(err) = self.interpret(&program.decls) {
             eprintln!("{}", err);
             true
@@ -146,13 +153,13 @@ impl Interpreter {
 
     fn declare(&mut self, decl: &Decl) -> Result<Signal, RuntimeError> {
         match decl {
-            Decl::Function(name, params, body) => {
+            Decl::Function(name, params, body, _) => {
                 let fun = Function::new(name.to_owned(), params.to_vec(), body, &self.env);
                 self.env
                     .borrow_mut()
                     .define(fun.name(), Value::Callable(Rc::new(fun)));
             }
-            Decl::Let(name, init) => {
+            Decl::Let(name, init, _) => {
                 let value = match init {
                     Some(expr) => self.eval(expr)?,
                     None => Value::None,
@@ -225,7 +232,16 @@ impl Interpreter {
             }
             Stmt::Assignment(var, expr, line) => {
                 let value = self.eval(expr)?;
-                if !self.env.borrow_mut().assign(var.name.clone(), value) {
+
+                let success = match self.hops.get(&var.id) {
+                    Some(dist) => self
+                        .env
+                        .borrow_mut()
+                        .assign_at(*dist, var.name.clone(), value),
+                    None => self.globals.borrow_mut().assign(var.name.clone(), value),
+                };
+
+                if !success {
                     return Err(RuntimeError::UndefinedVar(*line, var.name.clone()));
                 }
             }
@@ -343,12 +359,16 @@ impl Interpreter {
 
                 fun.call(self, args)?
             }
-            Expr::Variable(var, line) => self
-                .env
-                .borrow()
-                .search(&var.name)
-                .ok_or_else(|| RuntimeError::UndefinedVar(*line, var.name.clone()))?,
+            Expr::Variable(var, line) => self.lookup_var(var, *line)?,
             Expr::Group(ref inner) => self.eval(inner)?,
         })
+    }
+
+    fn lookup_var(&mut self, var: &Var, line: usize) -> Result<Value, RuntimeError> {
+        let value = match self.hops.get(&var.id) {
+            Some(dist) => self.env.borrow().get_at(*dist, &var.name),
+            None => self.globals.borrow().search(&var.name),
+        };
+        value.ok_or_else(|| RuntimeError::UndefinedVar(line, var.name.clone()))
     }
 }

@@ -1,0 +1,4 @@
+let a = "outer";
+{
+  let a = a; #!! [line 3] resolve error at 'a': cannot read local variable in its own initializer
+}
