@@ -8,6 +8,16 @@ use crate::ast::{Span, Token};
 
 const MAX_FN_ARITY: usize = 8;
 
+static mut VAR_ID: usize = 0;
+
+fn next_var_id() -> usize {
+    unsafe {
+        let id = VAR_ID;
+        VAR_ID += 1;
+        id
+    }
+}
+
 #[derive(Debug)]
 enum ParseError {
     InvalidAssignTarget(Span),
@@ -56,37 +66,18 @@ pub struct ParsedProgram {
     pub had_error: bool,
 }
 
-#[derive(Default)]
-pub struct IdGenerator {
-    var_id: usize,
-}
-
-impl IdGenerator {
-    pub fn new() -> Self {
-        Self { var_id: 0 }
-    }
-
-    pub fn next_id(&mut self) -> usize {
-        let id = self.var_id;
-        self.var_id += 1;
-        id
-    }
-}
-
-pub struct Parser<'a> {
+pub struct Parser {
     spans: Vec<Span>,
     idx: usize,
     had_error: bool,
-    id_gen: &'a mut IdGenerator,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(id_gen: &'a mut IdGenerator, spans: Vec<Span>) -> Self {
+impl Parser {
+    pub fn new(spans: Vec<Span>) -> Self {
         Self {
             spans,
             idx: 0,
             had_error: false,
-            id_gen,
         }
     }
 
@@ -414,7 +405,7 @@ impl<'a> Parser<'a> {
             Token::False => Expr::Literal(Primitive::Bool(false, curr.line)),
             Token::Num(n) => Expr::Literal(Primitive::Num(n, curr.line)),
             Token::Str(s) => Expr::Literal(Primitive::Str(s, curr.line)),
-            Token::Ident(s) => Expr::Variable(Var::new(self.id_gen.next_id(), s), curr.line),
+            Token::Ident(s) => Expr::Variable(Var::new(next_var_id(), s), curr.line),
             Token::Lparen => {
                 self.advance();
                 let expr = self.expression()?;

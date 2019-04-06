@@ -26,7 +26,11 @@ impl fmt::Display for ResolveError {
                 "[line {}] resolve error at '{}': cannot read local variable in its own initializer",
                 line, name
             ),
-            ResolveError::TopReturn(line) => write!(f, "[line {}] resolve error at 'return': cannot return from top-level code", line),
+            ResolveError::TopReturn(line) => write!(
+                f,
+                "[line {}] resolve error at 'return': cannot return from top-level code",
+                line
+            ),
         }
     }
 }
