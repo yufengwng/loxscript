@@ -3,6 +3,7 @@ use std::error;
 use std::fmt;
 
 use crate::ast::{Decl, Expr, Stmt};
+use crate::ResolvedProgram;
 
 #[derive(Debug)]
 enum ResolveError {
@@ -33,12 +34,6 @@ impl fmt::Display for ResolveError {
             ),
         }
     }
-}
-
-pub struct ResolvedProgram {
-    pub decls: Vec<Decl>,
-    pub hops: HashMap<usize, usize>,
-    pub had_error: bool,
 }
 
 #[derive(Clone, PartialEq)]
@@ -73,9 +68,9 @@ impl Resolver {
     pub fn resolve(mut self, program: Vec<Decl>) -> ResolvedProgram {
         self.resolve_all(&program);
         ResolvedProgram {
+            errored: self.had_error,
             decls: program,
             hops: self.hops,
-            had_error: self.had_error,
         }
     }
 

@@ -5,6 +5,7 @@ use std::rc::Rc;
 use crate::ast::{BinOp, LogOp, UniOp};
 use crate::ast::{Decl, Expr, Primitive, Stmt, Var};
 use crate::ast::{Span, Token};
+use crate::ParsedProgram;
 
 const MAX_FN_ARITY: usize = 8;
 
@@ -61,11 +62,6 @@ impl fmt::Display for ParseError {
     }
 }
 
-pub struct ParsedProgram {
-    pub decls: Vec<Decl>,
-    pub had_error: bool,
-}
-
 pub struct Parser {
     spans: Vec<Span>,
     idx: usize,
@@ -95,8 +91,8 @@ impl Parser {
         }
 
         ParsedProgram {
+            errored: self.had_error,
             decls,
-            had_error: self.had_error,
         }
     }
 

@@ -6,10 +6,10 @@ use std::rc::Rc;
 
 use crate::ast::{BinOp, LogOp, UniOp};
 use crate::ast::{Decl, Expr, Primitive, Stmt, Var};
-use crate::resolver::ResolvedProgram;
 use crate::runtime::Env;
 use crate::runtime::Value;
-use crate::runtime::{Callable, Function};
+use crate::runtime::{Callable, Function, Signal};
+use crate::ResolvedProgram;
 
 #[derive(Debug)]
 pub enum RuntimeError {
@@ -78,13 +78,6 @@ impl fmt::Display for Print {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "<native fn print>")
     }
-}
-
-pub enum Signal {
-    Ret(Value),
-    Break,
-    Cont,
-    None,
 }
 
 #[derive(Default)]

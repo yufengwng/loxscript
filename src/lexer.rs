@@ -1,10 +1,6 @@
 use crate::ast::Span;
 use crate::ast::Token;
-
-pub struct LexedProgram {
-    pub spans: Vec<Span>,
-    pub had_error: bool,
-}
+use crate::LexedProgram;
 
 pub struct Lexer {
     src: Vec<char>,
@@ -35,8 +31,8 @@ impl Lexer {
 
         spans.push(Span::new(Token::EOF, self.line));
         LexedProgram {
+            errored: self.had_error,
             spans,
-            had_error: self.had_error,
         }
     }
 

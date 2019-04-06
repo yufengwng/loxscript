@@ -4,10 +4,10 @@ use std::io;
 use std::io::Write;
 use std::process;
 
-use loxscript::interpreter::Interpreter;
-use loxscript::lexer::Lexer;
-use loxscript::parser::Parser;
-use loxscript::resolver::Resolver;
+use loxscript::Interpreter;
+use loxscript::Lexer;
+use loxscript::Parser;
+use loxscript::Resolver;
 
 static NAME: &str = "loxscript";
 
@@ -89,23 +89,18 @@ fn run_repl(interpreter: &mut Interpreter) -> i32 {
 }
 
 fn run(interpreter: &mut Interpreter, src: &str) -> (bool, bool) {
-    let lexer = Lexer::new(src);
-    let scanned = lexer.scan();
+    let scanned = Lexer::new(src).scan();
+    let parsed = Parser::new(scanned.spans).parse();
 
-    let parser = Parser::new(scanned.spans);
-    let parsed = parser.parse();
-
-    let parse_err = scanned.had_error || parsed.had_error;
-    if parse_err {
-        return (parse_err, false);
+    if scanned.errored || parsed.errored {
+        return (true, false);
     }
 
-    let resolver = Resolver::new();
-    let resolved = resolver.resolve(parsed.decls);
-    if resolved.had_error {
+    let resolved = Resolver::new().resolve(parsed.decls);
+    if resolved.errored {
         return (true, false);
     }
 
     let runtime_err = interpreter.run(resolved);
-    (parse_err, runtime_err)
+    (false, runtime_err)
 }

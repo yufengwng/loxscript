@@ -5,8 +5,8 @@ use std::rc::Rc;
 use crate::ast::Decl;
 use crate::interpreter::Interpreter;
 use crate::interpreter::RuntimeError;
-use crate::interpreter::Signal;
 use crate::runtime::Env;
+use crate::runtime::Signal;
 use crate::runtime::Value;
 
 pub trait Callable: fmt::Debug + fmt::Display {
