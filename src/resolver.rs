@@ -142,6 +142,10 @@ impl Resolver {
 
     fn resolve_declare(&mut self, decl: &Decl) {
         match decl {
+            Decl::Class(name, _methods, line) => {
+                self.declare(name, *line);
+                self.define(name);
+            }
             Decl::Function(name, params, body, line) => {
                 self.declare(name, *line);
                 self.define(name);

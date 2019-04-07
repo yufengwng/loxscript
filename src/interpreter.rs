@@ -8,7 +8,7 @@ use crate::ast::{BinOp, LogOp, UniOp};
 use crate::ast::{Decl, Expr, Primitive, Stmt, Var};
 use crate::runtime::Env;
 use crate::runtime::Value;
-use crate::runtime::{Callable, Function, Signal};
+use crate::runtime::{Callable, Class, Function, Signal};
 use crate::ResolvedProgram;
 
 #[derive(Debug)]
@@ -146,6 +146,13 @@ impl Interpreter {
 
     fn declare(&mut self, decl: &Decl) -> Result<Signal, RuntimeError> {
         match decl {
+            Decl::Class(name, methods, _) => {
+                self.env.borrow_mut().define(name.to_owned(), Value::None);
+                let class = Class::new(name.to_owned(), &methods);
+                self.env
+                    .borrow_mut()
+                    .assign(name.to_owned(), Value::Callable(Rc::new(class)));
+            }
             Decl::Function(name, params, body, _) => {
                 let fun = Function::new(name.to_owned(), params.to_vec(), body, &self.env);
                 self.env

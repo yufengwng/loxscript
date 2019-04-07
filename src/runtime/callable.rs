@@ -7,12 +7,59 @@ use crate::interpreter::Interpreter;
 use crate::interpreter::RuntimeError;
 use crate::runtime::Env;
 use crate::runtime::Signal;
-use crate::runtime::Value;
+use crate::runtime::{Instance, Value};
 
 pub trait Callable: fmt::Debug + fmt::Display {
     fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value, RuntimeError>;
     fn arity(&self) -> usize;
     fn name(&self) -> String;
+}
+
+pub struct Class {
+    name: String,
+    methods: Rc<Vec<Decl>>,
+}
+
+impl Class {
+    pub fn new(name: String, methods: &Rc<Vec<Decl>>) -> Self {
+        Self {
+            name,
+            methods: Rc::clone(methods),
+        }
+    }
+}
+
+impl Callable for Class {
+    fn call(
+        &self,
+        _interpreter: &mut Interpreter,
+        _args: Vec<Value>,
+    ) -> Result<Value, RuntimeError> {
+        Ok(Value::Instance(Rc::new(Instance::new(
+            self.name.to_owned(),
+            &self.methods,
+        ))))
+    }
+
+    fn arity(&self) -> usize {
+        0
+    }
+
+    fn name(&self) -> String {
+        self.name.to_owned()
+    }
+}
+
+impl fmt::Debug for Class {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Class {{ name: {:?} }}", self.name,)
+    }
+}
+
+impl fmt::Display for Class {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "<class {}>", self.name)
+    }
 }
 
 pub struct Function {

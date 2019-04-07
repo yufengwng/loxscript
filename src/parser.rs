@@ -25,7 +25,7 @@ enum ParseError {
     MaxArgs(Span),
     MaxParams(Span),
     MissingExpr(Span),
-    NotConsumed(Span, &'static str),
+    NotConsumed(Span, String),
 }
 
 impl error::Error for ParseError {}
@@ -97,18 +97,36 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Result<Decl, ParseError> {
-        if self.matches(&Token::Fun) {
-            return self.fun_declaration();
+        if self.matches(&Token::Class) {
+            self.class_declaration()
+        } else if self.matches(&Token::Fun) {
+            self.fun_declaration("function")
+        } else if self.matches(&Token::Let) {
+            self.let_declaration()
+        } else {
+            self.statement().map(Decl::Statement)
         }
-        if self.matches(&Token::Let) {
-            return self.let_declaration();
-        }
-        self.statement().map(Decl::Statement)
     }
 
-    fn fun_declaration(&mut self) -> Result<Decl, ParseError> {
-        let (name, line) = self.consume_ident("expected function name")?;
-        self.consume(&Token::Lparen, "expected '(' after function name")?;
+    fn class_declaration(&mut self) -> Result<Decl, ParseError> {
+        let (name, line) = self.consume_ident("expected class name")?;
+        self.consume(&Token::Lbrace, "expected '{' before class body")?;
+
+        let mut methods = Vec::new();
+        while !self.is_at_end() && !self.check(&Token::Rbrace) {
+            methods.push(self.fun_declaration("method")?);
+        }
+
+        self.consume(&Token::Rbrace, "expected '}' after class body")?;
+        Ok(Decl::Class(name, Rc::new(methods), line))
+    }
+
+    fn fun_declaration(&mut self, kind: &'static str) -> Result<Decl, ParseError> {
+        let msg = format!("expected {} name", kind);
+        let (name, line) = self.consume_ident(&msg)?;
+
+        let msg = format!("expected '(' after {} name", kind);
+        self.consume(&Token::Lparen, &msg)?;
 
         let mut params = Vec::new();
         if !self.check(&Token::Rparen) {
@@ -124,7 +142,9 @@ impl Parser {
         }
 
         self.consume(&Token::Rparen, "expected ')' after parameters")?;
-        self.consume(&Token::Lbrace, "expected '{' before function body")?;
+
+        let msg = format!("expected '{{' before {} body", kind);
+        self.consume(&Token::Lbrace, &msg)?;
 
         let body = self.block()?;
         Ok(Decl::Function(name, params, Rc::new(body), line))
@@ -442,15 +462,15 @@ impl Parser {
         }
     }
 
-    fn consume(&mut self, token: &Token, msg: &'static str) -> Result<Span, ParseError> {
+    fn consume(&mut self, token: &Token, msg: &str) -> Result<Span, ParseError> {
         if !self.is_at_end() && self.peek().token == *token {
             Ok(self.advance().clone())
         } else {
-            Err(ParseError::NotConsumed(self.peek().clone(), msg))
+            Err(ParseError::NotConsumed(self.peek().clone(), msg.to_owned()))
         }
     }
 
-    fn consume_ident(&mut self, msg: &'static str) -> Result<(String, usize), ParseError> {
+    fn consume_ident(&mut self, msg: &str) -> Result<(String, usize), ParseError> {
         if !self.is_at_end() {
             let curr = self.peek().clone();
             if let Token::Ident(name) = curr.token {
@@ -458,7 +478,7 @@ impl Parser {
                 return Ok((name, curr.line));
             }
         }
-        Err(ParseError::NotConsumed(self.peek().clone(), msg))
+        Err(ParseError::NotConsumed(self.peek().clone(), msg.to_owned()))
     }
 
     fn consume_unary_op(&mut self) -> Option<UniOp> {
