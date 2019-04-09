@@ -16,8 +16,11 @@ pub enum RuntimeError {
     Arity(usize, usize, usize),
     BinAddUnsupportedType(usize),
     BinNonNumeric(usize),
+    NoFields(usize),
     NotCallable(usize),
+    NotInstance(usize),
     UniNonNumeric(usize),
+    UndefinedProp(usize, String),
     UndefinedVar(usize, String),
 }
 
@@ -37,14 +40,29 @@ impl fmt::Display for RuntimeError {
             RuntimeError::BinNonNumeric(line) => {
                 write!(f, "[line {}] runtime error: operands must be numbers", line)
             }
+            RuntimeError::NoFields(line) => write!(
+                f,
+                "[line {}] runtime error: only instances have fields",
+                line
+            ),
             RuntimeError::NotCallable(line) => write!(
                 f,
                 "[line {}] runtime error: can only call functions and classes",
                 line
             ),
+            RuntimeError::NotInstance(line) => write!(
+                f,
+                "[line {}] runtime error: only instances have properties",
+                line
+            ),
             RuntimeError::UniNonNumeric(line) => {
                 write!(f, "[line {}] runtime error: operand must be a number", line)
             }
+            RuntimeError::UndefinedProp(line, name) => write!(
+                f,
+                "[line {}] runtime error: undefined property '{}'",
+                line, name
+            ),
             RuntimeError::UndefinedVar(line, name) => write!(
                 f,
                 "[line {}] runtime error: undefined variable '{}'",
@@ -245,6 +263,13 @@ impl Interpreter {
                     return Err(RuntimeError::UndefinedVar(*line, var.name.clone()));
                 }
             }
+            Stmt::Set(object, name, value, line) => match self.eval(object)? {
+                Value::Instance(obj) => {
+                    let value = self.eval(value)?;
+                    obj.borrow_mut().set(name.to_owned(), value);
+                }
+                _ => return Err(RuntimeError::NoFields(*line)),
+            },
             Stmt::Expression(expr) => {
                 self.eval(expr)?;
             }
@@ -358,6 +383,15 @@ impl Interpreter {
                 }
 
                 fun.call(self, args)?
+            }
+            Expr::Get(object, name, line) => {
+                return match self.eval(object)? {
+                    Value::Instance(obj) => obj
+                        .borrow()
+                        .get(&name)
+                        .ok_or_else(|| RuntimeError::UndefinedProp(*line, name.to_owned())),
+                    _ => Err(RuntimeError::NotInstance(*line)),
+                };
             }
             Expr::Variable(var, line) => self.lookup_var(var, *line)?,
             Expr::Group(ref inner) => self.eval(inner)?,

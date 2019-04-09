@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
@@ -10,7 +12,7 @@ pub enum Value {
     Bool(bool),
     Num(f64),
     Str(String),
-    Instance(Rc<Instance>),
+    Instance(Rc<RefCell<Instance>>),
     Callable(Rc<Callable>),
 }
 
@@ -45,7 +47,7 @@ impl fmt::Display for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::Num(n) => write!(f, "{}", n),
             Value::Str(s) => write!(f, "{}", s),
-            Value::Instance(inst) => write!(f, "{}", inst),
+            Value::Instance(inst) => write!(f, "{}", inst.borrow()),
             Value::Callable(fun) => write!(f, "{}", fun),
         }
     }
@@ -53,6 +55,7 @@ impl fmt::Display for Value {
 
 pub struct Instance {
     class: String,
+    fields: HashMap<String, Value>,
     methods: Rc<Vec<Decl>>,
 }
 
@@ -60,8 +63,21 @@ impl Instance {
     pub fn new(class: String, methods: &Rc<Vec<Decl>>) -> Self {
         Self {
             class,
+            fields: HashMap::new(),
             methods: Rc::clone(methods),
         }
+    }
+
+    pub fn get(&self, name: &str) -> Option<Value> {
+        if self.fields.contains_key(name) {
+            self.fields.get(name).cloned()
+        } else {
+            None
+        }
+    }
+
+    pub fn set(&mut self, name: String, value: Value) {
+        self.fields.insert(name, value);
     }
 }
 

@@ -26,7 +26,7 @@ for_stmt    : 'for' ( let_decl | assign_stmt | expr_stmt | ';' )
 if_stmt     : 'if' expression block ( 'elif' expression block )* ( 'else' block )? ;
 return_stmt : 'return' expression? ';' ;
 while_stmt  : 'while' expression block ;
-assign      : IDENT '=' expression ;
+assign      : ( call '.' )? IDENT '=' expression ;
 block       : '{' declaration* '}' ;
 
 expression  : logical_or ;
@@ -37,7 +37,7 @@ comparison  : addition ( ( '<' | '<=' | '>' | '>=' ) addition )* ;
 addition    : multiply ( ( '+' | '-' ) multiply )* ;
 multiply    : unary ( ( '*' | '/' | '%' ) unary )* ;
 unary       : ( '-' | 'not' ) unary | primary ;
-call        : primary ( '(' arguments? ')' )* ;
+call        : primary ( '(' arguments? ')' | '.' IDENT )* ;
 
 primary     : 'none' | 'true' | 'false'
             | NUM | STR | IDENT

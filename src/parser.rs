@@ -201,6 +201,12 @@ impl Parser {
                 }
                 Ok(Stmt::Assignment(var, value, line))
             }
+            Expr::Get(object, name, line) => {
+                if has_semi {
+                    self.consume(&Token::Semi, "expected ';' after assignment")?;
+                }
+                Ok(Stmt::Set(*object, name, value, line))
+            }
             _ => {
                 self.log_err(ParseError::InvalidAssignTarget(equals));
                 if has_semi {
@@ -390,6 +396,9 @@ impl Parser {
         loop {
             if self.matches(&Token::Lparen) {
                 expr = self.finish_call(expr)?;
+            } else if self.matches(&Token::Dot) {
+                let (name, line) = self.consume_ident("expected property name after '.'")?;
+                expr = Expr::Get(Box::new(expr), name, line);
             } else {
                 break;
             }

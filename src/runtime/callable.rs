@@ -35,10 +35,10 @@ impl Callable for Class {
         _interpreter: &mut Interpreter,
         _args: Vec<Value>,
     ) -> Result<Value, RuntimeError> {
-        Ok(Value::Instance(Rc::new(Instance::new(
+        Ok(Value::Instance(Rc::new(RefCell::new(Instance::new(
             self.name.to_owned(),
             &self.methods,
-        ))))
+        )))))
     }
 
     fn arity(&self) -> usize {

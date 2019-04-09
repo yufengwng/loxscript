@@ -1,0 +1,6 @@
+class Foo {}
+
+let foo = Foo();
+foo.bar = "not fn";
+
+foo.bar(); #@! [line 6] runtime error: can only call functions and classes

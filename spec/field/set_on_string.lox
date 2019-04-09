@@ -1,0 +1,1 @@
+"str".foo = "value"; #@! [line 1] runtime error: only instances have fields

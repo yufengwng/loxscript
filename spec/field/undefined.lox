@@ -1,0 +1,4 @@
+class Foo {}
+let foo = Foo();
+
+foo.bar; #@! [line 4] runtime error: undefined property 'bar'

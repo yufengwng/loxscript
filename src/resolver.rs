@@ -203,6 +203,10 @@ impl Resolver {
                 self.resolve_expression(expr);
                 self.save_hops(var.id, &var.name);
             }
+            Stmt::Set(object, _, value, _) => {
+                self.resolve_expression(value);
+                self.resolve_expression(object);
+            }
             Stmt::Expression(expr) => self.resolve_expression(expr),
             Stmt::Block(decls) => self.resolve_block(decls),
         }
@@ -227,6 +231,9 @@ impl Resolver {
                 for arg in arguments {
                     self.resolve_expression(arg);
                 }
+            }
+            Expr::Get(object, _, _) => {
+                self.resolve_expression(object);
             }
             Expr::Variable(var, line) => {
                 if let Some(false) = self.scopes.last().and_then(|map| map.get(&var.name)) {

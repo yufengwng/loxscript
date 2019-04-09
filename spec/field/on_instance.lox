@@ -1,0 +1,9 @@
+class Foo {}
+
+let foo = Foo();
+
+foo.bar = "bar value";
+foo.baz = "baz value";
+
+print(foo.bar); #=> bar value
+print(foo.baz); #=> baz value

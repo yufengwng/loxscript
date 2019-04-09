@@ -1,0 +1,10 @@
+class Foo {}
+
+fun bar() {
+  print("bar");
+}
+
+let foo = Foo();
+foo.bar = bar;
+
+foo.bar(); #=> bar

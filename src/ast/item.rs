@@ -55,6 +55,7 @@ pub enum Expr {
     Binary(Box<Expr>, BinOp, Box<Expr>),
     Unary(UniOp, Box<Expr>),
     Call(Box<Expr>, Vec<Expr>, usize),
+    Get(Box<Expr>, String, usize),
     Literal(Primitive),
     Variable(Var, usize),
     Group(Box<Expr>),
@@ -69,6 +70,7 @@ pub enum Stmt {
     Continue(usize),
     Return(Option<Expr>, usize),
     Assignment(Var, Expr, usize),
+    Set(Expr, String, Expr, usize),
     Expression(Expr),
     Block(Vec<Decl>),
 }

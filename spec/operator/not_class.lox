@@ -1,0 +1,3 @@
+class Bar {}
+print(not Bar);      #=> false
+print(not Bar());    #=> false
