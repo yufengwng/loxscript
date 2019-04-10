@@ -40,6 +40,7 @@ impl fmt::Display for ResolveError {
 enum FunType {
     None,
     Function,
+    Method,
 }
 
 pub struct Resolver {
@@ -142,9 +143,18 @@ impl Resolver {
 
     fn resolve_declare(&mut self, decl: &Decl) {
         match decl {
-            Decl::Class(name, _methods, line) => {
+            Decl::Class(name, methods, line) => {
                 self.declare(name, *line);
                 self.define(name);
+
+                for method in methods.iter() {
+                    let kind = FunType::Method;
+                    if let Decl::Function(fun_name, params, body, fun_line) = method {
+                        self.declare(fun_name, *fun_line);
+                        self.define(fun_name);
+                        self.resolve_function(params, body, kind);
+                    }
+                }
             }
             Decl::Function(name, params, body, line) => {
                 self.declare(name, *line);

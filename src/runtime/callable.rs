@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
@@ -16,28 +17,30 @@ pub trait Callable: fmt::Debug + fmt::Display {
 }
 
 pub struct Class {
-    name: String,
-    methods: Rc<Vec<Decl>>,
+    pub name: String,
+    pub methods: HashMap<String, Rc<Callable>>,
 }
 
 impl Class {
-    pub fn new(name: String, methods: &Rc<Vec<Decl>>) -> Self {
-        Self {
-            name,
-            methods: Rc::clone(methods),
-        }
+    pub fn find_method(&self, name: &str) -> Option<Value> {
+        self.methods
+            .get(name)
+            .map(|fun| Value::Callable(Rc::clone(fun)))
     }
 }
 
-impl Callable for Class {
-    fn call(
-        &self,
-        _interpreter: &mut Interpreter,
-        _args: Vec<Value>,
-    ) -> Result<Value, RuntimeError> {
+pub struct LoxClass(Rc<Class>);
+
+impl LoxClass {
+    pub fn new(name: String, methods: HashMap<String, Rc<Callable>>) -> Self {
+        Self(Rc::new(Class { name, methods }))
+    }
+}
+
+impl Callable for LoxClass {
+    fn call(&self, _: &mut Interpreter, _: Vec<Value>) -> Result<Value, RuntimeError> {
         Ok(Value::Instance(Rc::new(RefCell::new(Instance::new(
-            self.name.to_owned(),
-            &self.methods,
+            &self.0,
         )))))
     }
 
@@ -46,19 +49,24 @@ impl Callable for Class {
     }
 
     fn name(&self) -> String {
-        self.name.to_owned()
+        self.0.name.to_owned()
     }
 }
 
-impl fmt::Debug for Class {
+impl fmt::Debug for LoxClass {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Class {{ name: {:?} }}", self.name,)
+        write!(
+            f,
+            "Class {{ name: {:?}, methods: [{}] }}",
+            self.0.name,
+            self.0.methods.len()
+        )
     }
 }
 
-impl fmt::Display for Class {
+impl fmt::Display for LoxClass {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<class {}>", self.name)
+        write!(f, "<class {}>", self.0.name)
     }
 }
 

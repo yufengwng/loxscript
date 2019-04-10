@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
-use crate::ast::Decl;
 use crate::runtime::Callable;
+use crate::runtime::Class;
 
 #[derive(Clone, Debug)]
 pub enum Value {
@@ -54,17 +54,15 @@ impl fmt::Display for Value {
 }
 
 pub struct Instance {
-    class: String,
+    class: Rc<Class>,
     fields: HashMap<String, Value>,
-    methods: Rc<Vec<Decl>>,
 }
 
 impl Instance {
-    pub fn new(class: String, methods: &Rc<Vec<Decl>>) -> Self {
+    pub fn new(class: &Rc<Class>) -> Self {
         Self {
-            class,
+            class: Rc::clone(class),
             fields: HashMap::new(),
-            methods: Rc::clone(methods),
         }
     }
 
@@ -72,7 +70,7 @@ impl Instance {
         if self.fields.contains_key(name) {
             self.fields.get(name).cloned()
         } else {
-            None
+            self.class.find_method(name)
         }
     }
 
@@ -85,15 +83,15 @@ impl fmt::Debug for Instance {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Instance {{ class: {:?}, methods: [{}] }}",
-            self.class,
-            self.methods.len()
+            "Instance {{ class: {:?}, fields: [{}] }}",
+            self.class.name,
+            self.fields.len()
         )
     }
 }
 
 impl fmt::Display for Instance {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<{} instance>", self.class)
+        write!(f, "<{} instance>", self.class.name)
     }
 }
