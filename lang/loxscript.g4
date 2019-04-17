@@ -39,7 +39,7 @@ multiply    : unary ( ( '*' | '/' | '%' ) unary )* ;
 unary       : ( '-' | 'not' ) unary | primary ;
 call        : primary ( '(' arguments? ')' | '.' IDENT )* ;
 
-primary     : 'none' | 'true' | 'false'
+primary     : 'none' | 'true' | 'false' | 'self'
             | NUM | STR | IDENT
             | '(' expression ')'
             ;

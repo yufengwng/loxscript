@@ -8,6 +8,7 @@ use crate::ResolvedProgram;
 #[derive(Debug)]
 enum ResolveError {
     AlreadyDeclared(usize, String),
+    InvalidSelf(usize),
     OwnInitializer(usize, String),
     TopReturn(usize),
 }
@@ -21,6 +22,11 @@ impl fmt::Display for ResolveError {
                 f,
                 "[line {}] resolve error at '{}': variable with this name already declared in this scope",
                 line, name
+            ),
+            ResolveError::InvalidSelf(line) => write!(
+                f,
+                "[line {}] resolve error at 'self': cannot use 'self' outside of a class",
+                line
             ),
             ResolveError::OwnInitializer(line, name) => write!(
                 f,
@@ -43,11 +49,18 @@ enum FunType {
     Method,
 }
 
+#[derive(Clone, PartialEq)]
+enum ClassType {
+    None,
+    Class,
+}
+
 pub struct Resolver {
     scopes: Vec<HashMap<String, bool>>,
     hops: HashMap<usize, usize>,
     had_error: bool,
     curr_fun: FunType,
+    curr_class: ClassType,
 }
 
 impl Default for Resolver {
@@ -63,6 +76,7 @@ impl Resolver {
             hops: HashMap::new(),
             had_error: false,
             curr_fun: FunType::None,
+            curr_class: ClassType::None,
         }
     }
 
@@ -144,8 +158,14 @@ impl Resolver {
     fn resolve_declare(&mut self, decl: &Decl) {
         match decl {
             Decl::Class(name, methods, line) => {
+                let prev = self.curr_class.clone();
+                self.curr_class = ClassType::Class;
+
                 self.declare(name, *line);
                 self.define(name);
+
+                self.begin_scope();
+                self.define("self");
 
                 for method in methods.iter() {
                     let kind = FunType::Method;
@@ -155,6 +175,9 @@ impl Resolver {
                         self.resolve_function(params, body, kind);
                     }
                 }
+
+                self.end_scope();
+                self.curr_class = prev;
             }
             Decl::Function(name, params, body, line) => {
                 self.declare(name, *line);
@@ -250,6 +273,13 @@ impl Resolver {
                     self.log_err(ResolveError::OwnInitializer(*line, var.name.clone()));
                 }
                 self.save_hops(var.id, &var.name);
+            }
+            Expr::Self_(var, line) => {
+                if ClassType::None == self.curr_class {
+                    self.log_err(ResolveError::InvalidSelf(*line));
+                } else {
+                    self.save_hops(var.id, &var.name);
+                }
             }
             Expr::Group(inner) => self.resolve_expression(inner),
         }

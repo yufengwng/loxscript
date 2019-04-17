@@ -431,6 +431,7 @@ impl Parser {
             Token::Num(n) => Expr::Literal(Primitive::Num(n, curr.line)),
             Token::Str(s) => Expr::Literal(Primitive::Str(s, curr.line)),
             Token::Ident(s) => Expr::Variable(Var::new(next_var_id(), s), curr.line),
+            Token::Self_ => Expr::Self_(Var::new(next_var_id(), String::from("self")), curr.line),
             Token::Lparen => {
                 self.advance();
                 let expr = self.expression()?;

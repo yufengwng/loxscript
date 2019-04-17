@@ -1,0 +1,2 @@
+#!! [line 2] parse error at 'self': expected variable name
+let self = "value";

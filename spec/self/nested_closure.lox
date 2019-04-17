@@ -1,0 +1,19 @@
+class Foo {
+  getClosure() {
+    fun f() {
+      fun g() {
+        fun h() {
+          return self.toString();
+        }
+        return h;
+      }
+      return g;
+    }
+    return f;
+  }
+
+  toString() { return "Foo"; }
+}
+
+let closure = Foo().getClosure();
+print(closure()()()); #=> Foo

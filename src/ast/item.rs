@@ -58,6 +58,7 @@ pub enum Expr {
     Get(Box<Expr>, String, usize),
     Literal(Primitive),
     Variable(Var, usize),
+    Self_(Var, usize),
     Group(Box<Expr>),
 }
 

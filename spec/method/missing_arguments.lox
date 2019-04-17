@@ -1,0 +1,5 @@
+class Foo {
+  method(a, b) {}
+}
+
+Foo().method(1); #@! [line 5] runtime error: expected 2 arguments but got 1

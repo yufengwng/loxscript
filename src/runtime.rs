@@ -6,7 +6,7 @@ mod value;
 
 pub use self::callable::{Callable, Class, Function, LoxClass};
 pub use self::env::Env;
-pub use self::value::{Instance, Value};
+pub use self::value::{LoxInstance, Value};
 
 pub enum Signal {
     Ret(Value),

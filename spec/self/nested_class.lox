@@ -1,0 +1,20 @@
+class Outer {
+  method() {
+    print(self); #=> <Outer instance>
+
+    fun f() {
+      print(self); #=> <Outer instance>
+
+      class Inner {
+        method() {
+          print(self); #=> <Inner instance>
+        }
+      }
+
+      Inner().method();
+    }
+    f();
+  }
+}
+
+Outer().method();

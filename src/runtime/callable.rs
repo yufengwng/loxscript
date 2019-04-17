@@ -8,7 +8,7 @@ use crate::interpreter::Interpreter;
 use crate::interpreter::RuntimeError;
 use crate::runtime::Env;
 use crate::runtime::Signal;
-use crate::runtime::{Instance, Value};
+use crate::runtime::{LoxInstance, Value};
 
 pub trait Callable: fmt::Debug + fmt::Display {
     fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value, RuntimeError>;
@@ -18,30 +18,26 @@ pub trait Callable: fmt::Debug + fmt::Display {
 
 pub struct Class {
     pub name: String,
-    pub methods: HashMap<String, Rc<Callable>>,
+    pub methods: HashMap<String, Rc<Function>>,
 }
 
 impl Class {
-    pub fn find_method(&self, name: &str) -> Option<Value> {
-        self.methods
-            .get(name)
-            .map(|fun| Value::Callable(Rc::clone(fun)))
+    pub fn find_method(&self, name: &str) -> Option<Rc<Function>> {
+        self.methods.get(name).map(|fun| Rc::clone(fun))
     }
 }
 
 pub struct LoxClass(Rc<Class>);
 
 impl LoxClass {
-    pub fn new(name: String, methods: HashMap<String, Rc<Callable>>) -> Self {
+    pub fn new(name: String, methods: HashMap<String, Rc<Function>>) -> Self {
         Self(Rc::new(Class { name, methods }))
     }
 }
 
 impl Callable for LoxClass {
     fn call(&self, _: &mut Interpreter, _: Vec<Value>) -> Result<Value, RuntimeError> {
-        Ok(Value::Instance(Rc::new(RefCell::new(Instance::new(
-            &self.0,
-        )))))
+        Ok(Value::Instance(Rc::new(LoxInstance::new(&self.0))))
     }
 
     fn arity(&self) -> usize {
@@ -89,6 +85,17 @@ impl Function {
             params,
             body: Rc::clone(body),
             closure: Rc::clone(env),
+        }
+    }
+
+    pub fn bind(&self, instance: LoxInstance) -> Self {
+        let mut env = Env::enclosing(&self.closure);
+        env.define(String::from("self"), Value::Instance(Rc::new(instance)));
+        Self {
+            name: self.name.to_owned(),
+            params: self.params.to_vec(),
+            body: Rc::clone(&self.body),
+            closure: Rc::new(RefCell::new(env)),
         }
     }
 }

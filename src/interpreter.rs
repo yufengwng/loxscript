@@ -172,8 +172,7 @@ impl Interpreter {
                     if let Decl::Function(fun_name, params, body, _) = method {
                         let fun =
                             Function::new(fun_name.to_owned(), params.to_vec(), &body, &self.env);
-                        let fun: Rc<Callable> = Rc::new(fun);
-                        methods.insert(fun_name.to_owned(), fun);
+                        methods.insert(fun_name.to_owned(), Rc::new(fun));
                     }
                 }
 
@@ -277,7 +276,7 @@ impl Interpreter {
             Stmt::Set(object, name, value, line) => match self.eval(object)? {
                 Value::Instance(obj) => {
                     let value = self.eval(value)?;
-                    obj.borrow_mut().set(name.to_owned(), value);
+                    obj.set(name.to_owned(), value);
                 }
                 _ => return Err(RuntimeError::NoFields(*line)),
             },
@@ -398,13 +397,13 @@ impl Interpreter {
             Expr::Get(object, name, line) => {
                 return match self.eval(object)? {
                     Value::Instance(obj) => obj
-                        .borrow()
                         .get(&name)
                         .ok_or_else(|| RuntimeError::UndefinedProp(*line, name.to_owned())),
                     _ => Err(RuntimeError::NotInstance(*line)),
                 };
             }
             Expr::Variable(var, line) => self.lookup_var(var, *line)?,
+            Expr::Self_(var, line) => self.lookup_var(var, *line)?,
             Expr::Group(ref inner) => self.eval(inner)?,
         })
     }

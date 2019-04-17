@@ -12,7 +12,7 @@ pub enum Value {
     Bool(bool),
     Num(f64),
     Str(String),
-    Instance(Rc<RefCell<Instance>>),
+    Instance(Rc<LoxInstance>),
     Callable(Rc<Callable>),
 }
 
@@ -47,51 +47,59 @@ impl fmt::Display for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::Num(n) => write!(f, "{}", n),
             Value::Str(s) => write!(f, "{}", s),
-            Value::Instance(inst) => write!(f, "{}", inst.borrow()),
+            Value::Instance(inst) => write!(f, "{}", inst),
             Value::Callable(fun) => write!(f, "{}", fun),
         }
     }
 }
 
-pub struct Instance {
+struct Instance {
     class: Rc<Class>,
     fields: HashMap<String, Value>,
 }
 
-impl Instance {
+pub struct LoxInstance(Rc<RefCell<Instance>>);
+
+impl LoxInstance {
     pub fn new(class: &Rc<Class>) -> Self {
-        Self {
+        Self(Rc::new(RefCell::new(Instance {
             class: Rc::clone(class),
             fields: HashMap::new(),
-        }
+        })))
     }
 
     pub fn get(&self, name: &str) -> Option<Value> {
-        if self.fields.contains_key(name) {
-            self.fields.get(name).cloned()
+        let inst = self.0.borrow();
+        if inst.fields.contains_key(name) {
+            inst.fields.get(name).cloned()
         } else {
-            self.class.find_method(name)
+            inst.class.find_method(name).map(|fun| {
+                let fun = fun.bind(Self(Rc::clone(&self.0)));
+                let fun: Rc<Callable> = Rc::new(fun);
+                Value::Callable(fun)
+            })
         }
     }
 
-    pub fn set(&mut self, name: String, value: Value) {
-        self.fields.insert(name, value);
+    pub fn set(&self, name: String, value: Value) {
+        let mut inst = self.0.borrow_mut();
+        inst.fields.insert(name, value);
     }
 }
 
-impl fmt::Debug for Instance {
+impl fmt::Debug for LoxInstance {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "Instance {{ class: {:?}, fields: [{}] }}",
-            self.class.name,
-            self.fields.len()
+            self.0.borrow().class.name,
+            self.0.borrow().fields.len()
         )
     }
 }
 
-impl fmt::Display for Instance {
+impl fmt::Display for LoxInstance {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<{} instance>", self.class.name)
+        write!(f, "<{} instance>", self.0.borrow().class.name)
     }
 }

@@ -1,0 +1,7 @@
+class Foo {
+  method() {
+    print(method); #@! [line 3] runtime error: undefined variable 'method'
+  }
+}
+
+Foo().method();
