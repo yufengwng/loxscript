@@ -170,8 +170,13 @@ impl Interpreter {
                 let mut methods = HashMap::new();
                 for method in method_decls.iter() {
                     if let Decl::Function(fun_name, params, body, _) = method {
-                        let fun =
-                            Function::new(fun_name.to_owned(), params.to_vec(), &body, &self.env);
+                        let fun = Function::new(
+                            fun_name.to_owned(),
+                            params.to_vec(),
+                            &body,
+                            &self.env,
+                            fun_name == "init",
+                        );
                         methods.insert(fun_name.to_owned(), Rc::new(fun));
                     }
                 }
@@ -182,7 +187,7 @@ impl Interpreter {
                     .assign(name.to_owned(), Value::Callable(Rc::new(class)));
             }
             Decl::Function(name, params, body, _) => {
-                let fun = Function::new(name.to_owned(), params.to_vec(), body, &self.env);
+                let fun = Function::new(name.to_owned(), params.to_vec(), body, &self.env, false);
                 self.env
                     .borrow_mut()
                     .define(fun.name(), Value::Callable(Rc::new(fun)));

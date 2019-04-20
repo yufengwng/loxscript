@@ -36,12 +36,19 @@ impl LoxClass {
 }
 
 impl Callable for LoxClass {
-    fn call(&self, _: &mut Interpreter, _: Vec<Value>) -> Result<Value, RuntimeError> {
-        Ok(Value::Instance(Rc::new(LoxInstance::new(&self.0))))
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value, RuntimeError> {
+        let instance = LoxInstance::new(&self.0);
+        if let Some(fun) = self.0.find_method("init") {
+            fun.bind(instance.share()).call(interpreter, args)?;
+        }
+        Ok(Value::Instance(Rc::new(instance)))
     }
 
     fn arity(&self) -> usize {
-        0
+        self.0
+            .find_method("init")
+            .map(|fun| fun.arity())
+            .unwrap_or(0)
     }
 
     fn name(&self) -> String {
@@ -71,6 +78,7 @@ pub struct Function {
     params: Vec<(String, usize)>,
     body: Rc<Vec<Decl>>,
     closure: Rc<RefCell<Env>>,
+    is_init: bool,
 }
 
 impl Function {
@@ -79,12 +87,14 @@ impl Function {
         params: Vec<(String, usize)>,
         body: &Rc<Vec<Decl>>,
         env: &Rc<RefCell<Env>>,
+        is_init: bool,
     ) -> Self {
         Self {
             name,
             params,
             body: Rc::clone(body),
             closure: Rc::clone(env),
+            is_init,
         }
     }
 
@@ -96,6 +106,7 @@ impl Function {
             params: self.params.to_vec(),
             body: Rc::clone(&self.body),
             closure: Rc::new(RefCell::new(env)),
+            is_init: self.is_init,
         }
     }
 }
@@ -106,11 +117,18 @@ impl Callable for Function {
         self.params.iter().zip(args).for_each(|(param, arg)| {
             env.define(param.0.to_owned(), arg);
         });
+
         let sig = interpreter.exec_block(&self.body, env)?;
-        match sig {
-            Signal::Ret(value) => Ok(value),
-            _ => Ok(Value::None),
-        }
+        let result = match sig {
+            Signal::Ret(value) => value,
+            _ => Value::None,
+        };
+
+        Ok(if self.is_init {
+            self.closure.borrow().get_at(0, "self").unwrap()
+        } else {
+            result
+        })
     }
 
     fn arity(&self) -> usize {

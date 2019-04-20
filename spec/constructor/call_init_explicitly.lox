@@ -1,0 +1,15 @@
+class Foo {
+  init(arg) {
+    print("Foo.init(" + arg + ")");
+    self.field = "init";
+  }
+}
+
+let foo = Foo("one"); #=> Foo.init(one)
+foo.field = "field";
+
+let foo2 = foo.init("two"); #=> Foo.init(two)
+print(foo2); #=> <Foo instance>
+
+# Make sure init() doesn't create a fresh instance.
+print(foo.field); #=> init

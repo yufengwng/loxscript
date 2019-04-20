@@ -49,7 +49,9 @@ impl Lexer {
 
             ' ' | '\t' | '\r' => return None,
             '\n' => {
-                self.advance_line();
+                if !self.is_at_end() {
+                    self.advance_line();
+                }
                 return None;
             }
 

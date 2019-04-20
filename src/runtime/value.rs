@@ -68,13 +68,17 @@ impl LoxInstance {
         })))
     }
 
+    pub fn share(&self) -> Self {
+        Self(Rc::clone(&self.0))
+    }
+
     pub fn get(&self, name: &str) -> Option<Value> {
         let inst = self.0.borrow();
         if inst.fields.contains_key(name) {
             inst.fields.get(name).cloned()
         } else {
             inst.class.find_method(name).map(|fun| {
-                let fun = fun.bind(Self(Rc::clone(&self.0)));
+                let fun = fun.bind(self.share());
                 let fun: Rc<Callable> = Rc::new(fun);
                 Value::Callable(fun)
             })

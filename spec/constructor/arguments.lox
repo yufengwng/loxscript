@@ -1,0 +1,11 @@
+class Foo {
+  init(a, b) {
+    print("init"); #=> init
+    self.a = a;
+    self.b = b;
+  }
+}
+
+let foo = Foo(1, 2);
+print(foo.a); #=> 1
+print(foo.b); #=> 2

@@ -8,6 +8,7 @@ use crate::ResolvedProgram;
 #[derive(Debug)]
 enum ResolveError {
     AlreadyDeclared(usize, String),
+    InitReturn(usize),
     InvalidSelf(usize),
     OwnInitializer(usize, String),
     TopReturn(usize),
@@ -22,6 +23,11 @@ impl fmt::Display for ResolveError {
                 f,
                 "[line {}] resolve error at '{}': variable with this name already declared in this scope",
                 line, name
+            ),
+            ResolveError::InitReturn(line) => write!(
+                f,
+                "[line {}] resolve error at 'return': cannot return a value from an initializer",
+                line
             ),
             ResolveError::InvalidSelf(line) => write!(
                 f,
@@ -47,6 +53,7 @@ enum FunType {
     None,
     Function,
     Method,
+    Init,
 }
 
 #[derive(Clone, PartialEq)]
@@ -168,8 +175,12 @@ impl Resolver {
                 self.define("self");
 
                 for method in methods.iter() {
-                    let kind = FunType::Method;
                     if let Decl::Function(fun_name, params, body, fun_line) = method {
+                        let kind = if fun_name == "init" {
+                            FunType::Init
+                        } else {
+                            FunType::Method
+                        };
                         self.declare(fun_name, *fun_line);
                         self.define(fun_name);
                         self.resolve_function(params, body, kind);
@@ -229,6 +240,9 @@ impl Resolver {
                     self.log_err(ResolveError::TopReturn(*line));
                 }
                 if let Some(e) = expr {
+                    if self.curr_fun == FunType::Init {
+                        self.log_err(ResolveError::InitReturn(*line));
+                    }
                     self.resolve_expression(e);
                 }
             }

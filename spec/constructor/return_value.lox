@@ -1,0 +1,5 @@
+class Foo {
+  init() {
+    return "result"; #!! [line 3] resolve error at 'return': cannot return a value from an initializer
+  }
+}

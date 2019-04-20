@@ -1,0 +1,12 @@
+class Foo {
+  init(arg) {
+    print("Foo.init(" + arg + ")");
+    self.field = "init";
+  }
+}
+
+fun init() {
+  print("not initializer");
+}
+
+init(); #=> not initializer
