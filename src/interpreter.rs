@@ -104,6 +104,35 @@ impl fmt::Display for Print {
     }
 }
 
+#[derive(Debug)]
+struct Clock;
+
+impl Callable for Clock {
+    fn call(&self, _: &mut Interpreter, _: Vec<Value>) -> Result<Value, RuntimeError> {
+        use std::time::SystemTime;
+        Ok(Value::Num(
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .map(|d| d.as_secs() as f64)
+                .unwrap_or(0.0),
+        ))
+    }
+
+    fn arity(&self) -> usize {
+        0
+    }
+
+    fn name(&self) -> String {
+        "clock".to_owned()
+    }
+}
+
+impl fmt::Display for Clock {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "<native fn clock>")
+    }
+}
+
 #[derive(Default)]
 pub struct Interpreter {
     env: Rc<RefCell<Env>>,
@@ -115,6 +144,7 @@ impl Interpreter {
     pub fn new() -> Self {
         let mut globals = Env::new();
         globals.define(Print.name(), Value::Callable(Rc::new(Print)));
+        globals.define(Clock.name(), Value::Callable(Rc::new(Clock)));
         let globals = Rc::new(RefCell::new(globals));
         Self {
             env: Rc::clone(&globals),
