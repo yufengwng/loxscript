@@ -25,6 +25,10 @@ impl Env {
         }
     }
 
+    pub fn inner_env(&self) -> Rc<RefCell<Env>> {
+        self.inner.as_ref().cloned().unwrap()
+    }
+
     pub fn define(&mut self, name: String, value: Value) {
         self.values.insert(name, value);
     }

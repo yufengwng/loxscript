@@ -19,6 +19,7 @@ pub enum RuntimeError {
     NoFields(usize),
     NotCallable(usize),
     NotInstance(usize),
+    NotSuperclass(usize),
     UniNonNumeric(usize),
     UndefinedProp(usize, String),
     UndefinedVar(usize, String),
@@ -53,6 +54,11 @@ impl fmt::Display for RuntimeError {
             RuntimeError::NotInstance(line) => write!(
                 f,
                 "[line {}] runtime error: only instances have properties",
+                line
+            ),
+            RuntimeError::NotSuperclass(line) => write!(
+                f,
+                "[line {}] runtime error: superclass must be a class",
                 line
             ),
             RuntimeError::UniNonNumeric(line) => {
@@ -164,8 +170,30 @@ impl Interpreter {
 
     fn declare(&mut self, decl: &Decl) -> Result<Signal, RuntimeError> {
         match decl {
-            Decl::Class(name, method_decls, _) => {
+            Decl::Class(name, superclass, method_decls, _) => {
+                let superclass = if let Some(super_expr) = superclass {
+                    let value = self.eval(super_expr)?;
+                    match value {
+                        Value::Class(ref class_ptr) => Some(Rc::clone(class_ptr)),
+                        _ => {
+                            return Err(RuntimeError::NotSuperclass(match super_expr {
+                                Expr::Variable(_, line) => *line,
+                                _ => 0,
+                            }));
+                        }
+                    }
+                } else {
+                    None
+                };
+
                 self.env.borrow_mut().define(name.to_owned(), Value::None);
+
+                if let Some(ref parent) = superclass {
+                    self.env = Rc::new(RefCell::new(Env::enclosing(&self.env)));
+                    self.env
+                        .borrow_mut()
+                        .define(String::from("super"), Value::Class(Rc::clone(parent)));
+                }
 
                 let mut methods = HashMap::new();
                 for method in method_decls.iter() {
@@ -181,10 +209,15 @@ impl Interpreter {
                     }
                 }
 
-                let class = LoxClass::new(name.to_owned(), methods);
+                let has_superclass = superclass.is_some();
+                let class = LoxClass::new(name.to_owned(), superclass, methods);
+                if has_superclass {
+                    let inner = self.env.borrow().inner_env();
+                    self.env = inner;
+                }
                 self.env
                     .borrow_mut()
-                    .assign(name.to_owned(), Value::Callable(Rc::new(class)));
+                    .assign(name.to_owned(), Value::Class(Rc::new(class)));
             }
             Decl::Function(name, params, body, _) => {
                 let fun = Function::new(name.to_owned(), params.to_vec(), body, &self.env, false);
@@ -387,6 +420,7 @@ impl Interpreter {
                 }
 
                 let fun = match callee {
+                    Value::Class(class) => class,
                     Value::Callable(fun) => fun,
                     _ => {
                         return Err(RuntimeError::NotCallable(*line));
@@ -409,6 +443,26 @@ impl Interpreter {
             }
             Expr::Variable(var, line) => self.lookup_var(var, *line)?,
             Expr::Self_(var, line) => self.lookup_var(var, *line)?,
+            Expr::Super(var, _, method, line) => {
+                let dist = self.hops.get(&var.id).cloned().unwrap();
+                let superclass = match self.env.borrow().get_at(dist, &var.name).unwrap() {
+                    Value::Class(clz) => clz,
+                    _ => panic!(),
+                };
+                let instance = match self.env.borrow().get_at(dist - 1, "self").unwrap() {
+                    Value::Instance(inst) => inst,
+                    _ => panic!(),
+                };
+                return superclass
+                    .inner()
+                    .find_method(method)
+                    .map(|fun| {
+                        let fun = fun.bind(instance.share());
+                        let fun: Rc<Callable> = Rc::new(fun);
+                        Value::Callable(fun)
+                    })
+                    .ok_or_else(|| RuntimeError::UndefinedProp(*line, method.to_owned()));
+            }
             Expr::Group(ref inner) => self.eval(inner)?,
         })
     }

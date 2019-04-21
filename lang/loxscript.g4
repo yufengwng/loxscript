@@ -3,7 +3,7 @@ grammar loxscript;
 program     : declaration* EOF ;
 
 declaration : class_decl | fun_decl | let_decl | statement ;
-class_decl  : 'class' IDENT '{' function* '}' ;
+class_decl  : 'class' IDENT ( '<' IDENT )? '{' function* '}' ;
 fun_decl    : 'fun' function ;
 let_decl    : 'let' IDENT ( '=' expression )? ';' ;
 
@@ -41,6 +41,7 @@ call        : primary ( '(' arguments? ')' | '.' IDENT )* ;
 
 primary     : 'none' | 'true' | 'false' | 'self'
             | NUM | STR | IDENT
+            | 'super' '.' IDENT
             | '(' expression ')'
             ;
 

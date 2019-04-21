@@ -110,6 +110,14 @@ impl Parser {
 
     fn class_declaration(&mut self) -> Result<Decl, ParseError> {
         let (name, line) = self.consume_ident("expected class name")?;
+
+        let superclass = if self.matches(&Token::Lt) {
+            let (name, line) = self.consume_ident("expected superclass name")?;
+            Some(Expr::Variable(Var::new(next_var_id(), name), line))
+        } else {
+            None
+        };
+
         self.consume(&Token::Lbrace, "expected '{' before class body")?;
 
         let mut methods = Vec::new();
@@ -118,7 +126,7 @@ impl Parser {
         }
 
         self.consume(&Token::Rbrace, "expected '}' after class body")?;
-        Ok(Decl::Class(name, Rc::new(methods), line))
+        Ok(Decl::Class(name, superclass, Rc::new(methods), line))
     }
 
     fn fun_declaration(&mut self, kind: &'static str) -> Result<Decl, ParseError> {
@@ -432,6 +440,17 @@ impl Parser {
             Token::Str(s) => Expr::Literal(Primitive::Str(s, curr.line)),
             Token::Ident(s) => Expr::Variable(Var::new(next_var_id(), s), curr.line),
             Token::Self_ => Expr::Self_(Var::new(next_var_id(), String::from("self")), curr.line),
+            Token::Super => {
+                self.advance();
+                self.consume(&Token::Dot, "expected '.' after 'super'")?;
+                let (method, line) = self.consume_ident("expected superclass method name")?;
+                return Ok(Expr::Super(
+                    Var::new(next_var_id(), String::from("super")),
+                    curr.line,
+                    method,
+                    line,
+                ));
+            }
             Token::Lparen => {
                 self.advance();
                 let expr = self.expression()?;

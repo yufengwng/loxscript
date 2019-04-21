@@ -1,0 +1,13 @@
+class A {
+  method() {}
+}
+
+class B < A {
+  method() {
+    #!! [line 8] parse error at ')': expected '.' after 'super'
+    (super).method();
+  }
+}
+
+# FIXME
+#!! [line 9] parse error at '}': expected an expression

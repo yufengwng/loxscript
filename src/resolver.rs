@@ -8,9 +8,12 @@ use crate::ResolvedProgram;
 #[derive(Debug)]
 enum ResolveError {
     AlreadyDeclared(usize, String),
+    InheritSelf(usize, String),
     InitReturn(usize),
     InvalidSelf(usize),
     OwnInitializer(usize, String),
+    SuperNotClass(usize),
+    SuperNotSub(usize),
     TopReturn(usize),
 }
 
@@ -22,6 +25,11 @@ impl fmt::Display for ResolveError {
             ResolveError::AlreadyDeclared(line, name) => write!(
                 f,
                 "[line {}] resolve error at '{}': variable with this name already declared in this scope",
+                line, name
+            ),
+            ResolveError::InheritSelf(line, name) => write!(
+                f,
+                "[line {}] resolve error at '{}': a class cannot inherit from itself",
                 line, name
             ),
             ResolveError::InitReturn(line) => write!(
@@ -38,6 +46,16 @@ impl fmt::Display for ResolveError {
                 f,
                 "[line {}] resolve error at '{}': cannot read local variable in its own initializer",
                 line, name
+            ),
+            ResolveError::SuperNotClass(line) => write!(
+                f,
+                "[line {}] resolve error at 'super': cannot use 'super' outside of a class",
+                line
+            ),
+            ResolveError::SuperNotSub(line) => write!(
+                f,
+                "[line {}] resolve error at 'super': cannot use 'super' in a class with no superclass",
+                line
             ),
             ResolveError::TopReturn(line) => write!(
                 f,
@@ -60,6 +78,7 @@ enum FunType {
 enum ClassType {
     None,
     Class,
+    Subclass,
 }
 
 pub struct Resolver {
@@ -164,12 +183,24 @@ impl Resolver {
 
     fn resolve_declare(&mut self, decl: &Decl) {
         match decl {
-            Decl::Class(name, methods, line) => {
+            Decl::Class(name, superclass, methods, line) => {
                 let prev = self.curr_class.clone();
                 self.curr_class = ClassType::Class;
 
                 self.declare(name, *line);
                 self.define(name);
+
+                if let Some(super_expr) = superclass {
+                    if let Expr::Variable(var, _) = super_expr {
+                        if var.name == *name {
+                            self.log_err(ResolveError::InheritSelf(*line, var.name.to_owned()));
+                        }
+                    }
+                    self.curr_class = ClassType::Subclass;
+                    self.resolve_expression(super_expr);
+                    self.begin_scope();
+                    self.define("super");
+                }
 
                 self.begin_scope();
                 self.define("self");
@@ -188,6 +219,9 @@ impl Resolver {
                 }
 
                 self.end_scope();
+                if superclass.is_some() {
+                    self.end_scope();
+                }
                 self.curr_class = prev;
             }
             Decl::Function(name, params, body, line) => {
@@ -294,6 +328,14 @@ impl Resolver {
                 } else {
                     self.save_hops(var.id, &var.name);
                 }
+            }
+            Expr::Super(var, line, _, _) => {
+                match self.curr_class {
+                    ClassType::None => self.log_err(ResolveError::SuperNotClass(*line)),
+                    ClassType::Class => self.log_err(ResolveError::SuperNotSub(*line)),
+                    ClassType::Subclass => {}
+                }
+                self.save_hops(var.id, &var.name);
             }
             Expr::Group(inner) => self.resolve_expression(inner),
         }

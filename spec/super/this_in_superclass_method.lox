@@ -1,0 +1,16 @@
+class Base {
+  init(a) {
+    self.a = a;
+  }
+}
+
+class Derived < Base {
+  init(a, b) {
+    super.init(a);
+    self.b = b;
+  }
+}
+
+let derived = Derived("a", "b");
+print(derived.a); #=> a
+print(derived.b); #=> b

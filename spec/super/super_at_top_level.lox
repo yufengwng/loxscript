@@ -1,0 +1,2 @@
+super.foo; #!! [line 1] resolve error at 'super': cannot use 'super' outside of a class
+super.foo("bar"); #!! [line 2] resolve error at 'super': cannot use 'super' outside of a class

@@ -1,0 +1,14 @@
+class A {
+  init(param) {
+    self.field = param;
+  }
+
+  test() {
+    print(self.field);
+  }
+}
+
+class B < A {}
+
+let b = B("value");
+b.test(); #=> value

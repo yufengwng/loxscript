@@ -59,6 +59,7 @@ pub enum Expr {
     Literal(Primitive),
     Variable(Var, usize),
     Self_(Var, usize),
+    Super(Var, usize, String, usize),
     Group(Box<Expr>),
 }
 
@@ -78,7 +79,7 @@ pub enum Stmt {
 
 /// Language items that introduce name bindings.
 pub enum Decl {
-    Class(String, Rc<Vec<Decl>>, usize),
+    Class(String, Option<Expr>, Rc<Vec<Decl>>, usize),
     Function(String, Vec<(String, usize)>, Rc<Vec<Decl>>, usize),
     Let(String, Option<Expr>, usize),
     Statement(Stmt),

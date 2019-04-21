@@ -1,0 +1,7 @@
+class Base {
+  foo() {
+    super.doesNotExist; #!! [line 3] resolve error at 'super': cannot use 'super' in a class with no superclass
+  }
+}
+
+Base().foo();

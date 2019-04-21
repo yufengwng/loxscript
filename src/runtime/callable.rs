@@ -18,20 +18,42 @@ pub trait Callable: fmt::Debug + fmt::Display {
 
 pub struct Class {
     pub name: String,
+    pub superclass: Option<Rc<LoxClass>>,
     pub methods: HashMap<String, Rc<Function>>,
 }
 
 impl Class {
     pub fn find_method(&self, name: &str) -> Option<Rc<Function>> {
-        self.methods.get(name).map(|fun| Rc::clone(fun))
+        self.methods
+            .get(name)
+            .map(|fun| Rc::clone(fun))
+            .or_else(|| {
+                if let Some(parent) = &self.superclass {
+                    parent.0.find_method(name)
+                } else {
+                    None
+                }
+            })
     }
 }
 
 pub struct LoxClass(Rc<Class>);
 
 impl LoxClass {
-    pub fn new(name: String, methods: HashMap<String, Rc<Function>>) -> Self {
-        Self(Rc::new(Class { name, methods }))
+    pub fn new(
+        name: String,
+        superclass: Option<Rc<LoxClass>>,
+        methods: HashMap<String, Rc<Function>>,
+    ) -> Self {
+        Self(Rc::new(Class {
+            name,
+            superclass,
+            methods,
+        }))
+    }
+
+    pub fn inner(&self) -> &Class {
+        &self.0
     }
 }
 

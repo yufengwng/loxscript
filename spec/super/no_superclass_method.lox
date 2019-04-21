@@ -1,0 +1,9 @@
+class Base {}
+
+class Derived < Base {
+  foo() {
+    super.doesNotExist(1); #@! [line 5] runtime error: undefined property 'doesNotExist'
+  }
+}
+
+Derived().foo();
