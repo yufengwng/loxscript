@@ -1,0 +1,34 @@
+let i = 0;
+
+let loopStart = clock();
+
+while i < 10000000 {
+  i = i + 1;
+
+  1; 1; 1; 2; 1; none; 1; "str"; 1; true;
+  none; none; none; 1; none; "str"; none; true;
+  true; true; true; 1; true; false; true; "str"; true; none;
+  "str"; "str"; "str"; "stru"; "str"; 1; "str"; none; "str"; true;
+}
+
+let loopTime = clock() - loopStart;
+
+let start = clock();
+
+i = 0;
+while i < 10000000 {
+  i = i + 1;
+
+  1 == 1; 1 == 2; 1 == none; 1 == "str"; 1 == true;
+  none == none; none == 1; none == "str"; none == true;
+  true == true; true == 1; true == false; true == "str"; true == none;
+  "str" == "str"; "str" == "stru"; "str" == 1; "str" == none; "str" == true;
+}
+
+let elapsed = clock() - start;
+print("loop");
+print(loopTime);
+print("elapsed");
+print(elapsed);
+print("equals");
+print(elapsed - loopTime);
