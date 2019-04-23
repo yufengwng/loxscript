@@ -1,5 +1,6 @@
-pub mod ast;
-pub mod runtime;
+mod ast;
+mod runtime;
+mod stdlib;
 
 mod interpreter;
 mod lexer;

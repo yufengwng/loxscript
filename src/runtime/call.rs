@@ -5,16 +5,10 @@ use std::rc::Rc;
 
 use crate::ast::Decl;
 use crate::interpreter::Interpreter;
-use crate::interpreter::RuntimeError;
 use crate::runtime::Env;
+use crate::runtime::RunResult;
 use crate::runtime::Signal;
-use crate::runtime::{LoxInstance, Value};
-
-pub trait Callable: fmt::Debug + fmt::Display {
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value, RuntimeError>;
-    fn arity(&self) -> usize;
-    fn name(&self) -> String;
-}
+use crate::runtime::{Call, LoxInstance, Value};
 
 pub struct Class {
     pub name: String,
@@ -57,11 +51,11 @@ impl LoxClass {
     }
 }
 
-impl Callable for LoxClass {
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value, RuntimeError> {
+impl Call for LoxClass {
+    fn call(&self, rt: &mut Interpreter, args: Vec<Value>) -> RunResult<Value> {
         let instance = LoxInstance::new(&self.0);
         if let Some(fun) = self.0.find_method("init") {
-            fun.bind(instance.share()).call(interpreter, args)?;
+            fun.bind(instance.share()).call(rt, args)?;
         }
         Ok(Value::Instance(Rc::new(instance)))
     }
@@ -133,14 +127,14 @@ impl Function {
     }
 }
 
-impl Callable for Function {
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value, RuntimeError> {
+impl Call for Function {
+    fn call(&self, rt: &mut Interpreter, args: Vec<Value>) -> RunResult<Value> {
         let mut env = Env::enclosing(&self.closure);
         self.params.iter().zip(args).for_each(|(param, arg)| {
             env.define(param.0.to_owned(), arg);
         });
 
-        let sig = interpreter.exec_block(&self.body, env)?;
+        let sig = rt.exec_block(&self.body, env)?;
         let result = match sig {
             Signal::Ret(value) => value,
             _ => Value::None,

@@ -1,137 +1,15 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::error;
-use std::fmt;
 use std::rc::Rc;
 
 use crate::ast::{BinOp, LogOp, UniOp};
 use crate::ast::{Decl, Expr, Primitive, Stmt, Var};
 use crate::runtime::Env;
 use crate::runtime::Value;
-use crate::runtime::{Callable, Function, LoxClass, Signal};
+use crate::runtime::{Call, Function, LoxClass, Signal};
+use crate::runtime::{RunResult, RuntimeError};
+use crate::stdlib::{Clock, Print};
 use crate::ResolvedProgram;
-
-#[derive(Debug)]
-pub enum RuntimeError {
-    Arity(usize, usize, usize),
-    BinAddUnsupportedType(usize),
-    BinNonNumeric(usize),
-    NoFields(usize),
-    NotCallable(usize),
-    NotInstance(usize),
-    NotSuperclass(usize),
-    UniNonNumeric(usize),
-    UndefinedProp(usize, String),
-    UndefinedVar(usize, String),
-}
-
-impl fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            RuntimeError::Arity(line, expected, actual) => write!(
-                f,
-                "[line {}] runtime error: expected {} arguments but got {}",
-                line, expected, actual
-            ),
-            RuntimeError::BinAddUnsupportedType(line) => write!(
-                f,
-                "[line {}] runtime error: operands must be two numbers or two strings",
-                line
-            ),
-            RuntimeError::BinNonNumeric(line) => {
-                write!(f, "[line {}] runtime error: operands must be numbers", line)
-            }
-            RuntimeError::NoFields(line) => write!(
-                f,
-                "[line {}] runtime error: only instances have fields",
-                line
-            ),
-            RuntimeError::NotCallable(line) => write!(
-                f,
-                "[line {}] runtime error: can only call functions and classes",
-                line
-            ),
-            RuntimeError::NotInstance(line) => write!(
-                f,
-                "[line {}] runtime error: only instances have properties",
-                line
-            ),
-            RuntimeError::NotSuperclass(line) => write!(
-                f,
-                "[line {}] runtime error: superclass must be a class",
-                line
-            ),
-            RuntimeError::UniNonNumeric(line) => {
-                write!(f, "[line {}] runtime error: operand must be a number", line)
-            }
-            RuntimeError::UndefinedProp(line, name) => write!(
-                f,
-                "[line {}] runtime error: undefined property '{}'",
-                line, name
-            ),
-            RuntimeError::UndefinedVar(line, name) => write!(
-                f,
-                "[line {}] runtime error: undefined variable '{}'",
-                line, name
-            ),
-        }
-    }
-}
-
-impl error::Error for RuntimeError {}
-
-#[derive(Debug)]
-struct Print;
-
-impl Callable for Print {
-    fn call(&self, _: &mut Interpreter, args: Vec<Value>) -> Result<Value, RuntimeError> {
-        println!("{}", args[0]);
-        Ok(Value::None)
-    }
-
-    fn arity(&self) -> usize {
-        1
-    }
-
-    fn name(&self) -> String {
-        "print".to_owned()
-    }
-}
-
-impl fmt::Display for Print {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<native fn print>")
-    }
-}
-
-#[derive(Debug)]
-struct Clock;
-
-impl Callable for Clock {
-    fn call(&self, _: &mut Interpreter, _: Vec<Value>) -> Result<Value, RuntimeError> {
-        use std::time::SystemTime;
-        Ok(Value::Num(
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .map(|d| d.as_secs() as f64)
-                .unwrap_or(0.0),
-        ))
-    }
-
-    fn arity(&self) -> usize {
-        0
-    }
-
-    fn name(&self) -> String {
-        "clock".to_owned()
-    }
-}
-
-impl fmt::Display for Clock {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<native fn clock>")
-    }
-}
 
 #[derive(Default)]
 pub struct Interpreter {
@@ -143,8 +21,8 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         let mut globals = Env::new();
-        globals.define(Print.name(), Value::Callable(Rc::new(Print)));
-        globals.define(Clock.name(), Value::Callable(Rc::new(Clock)));
+        globals.define(Print.name(), Value::Call(Rc::new(Print)));
+        globals.define(Clock.name(), Value::Call(Rc::new(Clock)));
         let globals = Rc::new(RefCell::new(globals));
         Self {
             env: Rc::clone(&globals),
@@ -163,7 +41,7 @@ impl Interpreter {
         }
     }
 
-    pub fn exec_block(&mut self, decls: &[Decl], env: Env) -> Result<Signal, RuntimeError> {
+    pub fn exec_block(&mut self, decls: &[Decl], env: Env) -> RunResult<Signal> {
         self.with_scope(env, |this| {
             for decl in decls {
                 let sig = this.declare(decl)?;
@@ -178,9 +56,9 @@ impl Interpreter {
         })
     }
 
-    fn with_scope<F>(&mut self, env: Env, mut f: F) -> Result<Signal, RuntimeError>
+    fn with_scope<F>(&mut self, env: Env, mut f: F) -> RunResult<Signal>
     where
-        F: FnMut(&mut Self) -> Result<Signal, RuntimeError>,
+        F: FnMut(&mut Self) -> RunResult<Signal>,
     {
         let prev = Rc::clone(&self.env);
         self.env = Rc::new(RefCell::new(env));
@@ -191,14 +69,14 @@ impl Interpreter {
         res
     }
 
-    fn interpret(&mut self, program: &[Decl]) -> Result<(), RuntimeError> {
+    fn interpret(&mut self, program: &[Decl]) -> RunResult<()> {
         for decl in program {
             self.declare(decl)?;
         }
         Ok(())
     }
 
-    fn declare(&mut self, decl: &Decl) -> Result<Signal, RuntimeError> {
+    fn declare(&mut self, decl: &Decl) -> RunResult<Signal> {
         match decl {
             Decl::Class(name, superclass, method_decls, _) => {
                 let superclass = if let Some(super_expr) = superclass {
@@ -253,7 +131,7 @@ impl Interpreter {
                 let fun = Function::new(name.to_owned(), params.to_vec(), body, &self.env, false);
                 self.env
                     .borrow_mut()
-                    .define(fun.name(), Value::Callable(Rc::new(fun)));
+                    .define(fun.name(), Value::Call(Rc::new(fun)));
             }
             Decl::Let(name, init, _) => {
                 let value = match init {
@@ -267,7 +145,7 @@ impl Interpreter {
         Ok(Signal::None)
     }
 
-    fn exec(&mut self, stmt: &Stmt) -> Result<Signal, RuntimeError> {
+    fn exec(&mut self, stmt: &Stmt) -> RunResult<Signal> {
         match stmt {
             Stmt::For(init, cond, post, body) => {
                 return self.with_scope(Env::enclosing(&self.env), |this| {
@@ -356,7 +234,7 @@ impl Interpreter {
         Ok(Signal::None)
     }
 
-    fn eval(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
+    fn eval(&mut self, expr: &Expr) -> RunResult<Value> {
         Ok(match expr {
             Expr::Literal(ref prim) => match prim {
                 Primitive::None(_) => Value::None,
@@ -451,14 +329,14 @@ impl Interpreter {
 
                 let fun = match callee {
                     Value::Class(class) => class,
-                    Value::Callable(fun) => fun,
+                    Value::Call(fun) => fun,
                     _ => {
                         return Err(RuntimeError::NotCallable(*line));
                     }
                 };
 
                 if args.len() != fun.arity() {
-                    return Err(RuntimeError::Arity(*line, fun.arity(), args.len()));
+                    return Err(RuntimeError::ArityMismatch(*line, fun.arity(), args.len()));
                 }
 
                 fun.call(self, args)?
@@ -488,8 +366,8 @@ impl Interpreter {
                     .find_method(method)
                     .map(|fun| {
                         let fun = fun.bind(instance.share());
-                        let fun: Rc<Callable> = Rc::new(fun);
-                        Value::Callable(fun)
+                        let fun: Rc<Call> = Rc::new(fun);
+                        Value::Call(fun)
                     })
                     .ok_or_else(|| RuntimeError::UndefinedProp(*line, method.to_owned()));
             }
@@ -497,7 +375,7 @@ impl Interpreter {
         })
     }
 
-    fn lookup_var(&mut self, var: &Var, line: usize) -> Result<Value, RuntimeError> {
+    fn lookup_var(&mut self, var: &Var, line: usize) -> RunResult<Value> {
         let value = match self.hops.get(&var.id) {
             Some(dist) => self.env.borrow().get_at(*dist, &var.name),
             None => self.globals.borrow().search(&var.name),

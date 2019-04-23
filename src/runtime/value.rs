@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
-use crate::runtime::Callable;
+use crate::runtime::Call;
 use crate::runtime::{Class, LoxClass};
 
 #[derive(Clone, Debug)]
@@ -12,9 +12,9 @@ pub enum Value {
     Bool(bool),
     Num(f64),
     Str(String),
+    Call(Rc<Call>),
     Class(Rc<LoxClass>),
     Instance(Rc<LoxInstance>),
-    Callable(Rc<Callable>),
 }
 
 impl Value {
@@ -36,7 +36,7 @@ impl PartialEq for Value {
             (Value::Str(lhs), Value::Str(rhs)) => lhs == rhs,
             (Value::Class(lhs), Value::Class(rhs)) => Rc::ptr_eq(lhs, rhs),
             (Value::Instance(lhs), Value::Instance(rhs)) => Rc::ptr_eq(lhs, rhs),
-            (Value::Callable(lhs), Value::Callable(rhs)) => Rc::ptr_eq(lhs, rhs),
+            (Value::Call(lhs), Value::Call(rhs)) => Rc::ptr_eq(lhs, rhs),
             _ => false,
         }
     }
@@ -51,7 +51,7 @@ impl fmt::Display for Value {
             Value::Str(s) => write!(f, "{}", s),
             Value::Class(class) => write!(f, "{}", class),
             Value::Instance(inst) => write!(f, "{}", inst),
-            Value::Callable(fun) => write!(f, "{}", fun),
+            Value::Call(fun) => write!(f, "{}", fun),
         }
     }
 }
@@ -82,8 +82,8 @@ impl LoxInstance {
         } else {
             inst.class.find_method(name).map(|fun| {
                 let fun = fun.bind(self.share());
-                let fun: Rc<Callable> = Rc::new(fun);
-                Value::Callable(fun)
+                let fun: Rc<Call> = Rc::new(fun);
+                Value::Call(fun)
             })
         }
     }
