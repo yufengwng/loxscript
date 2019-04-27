@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -11,10 +10,9 @@ use crate::runtime::{RunResult, RuntimeError};
 use crate::stdlib::{Clock, Print};
 use crate::ResolvedProgram;
 
-#[derive(Default)]
 pub struct Interpreter {
-    env: Rc<RefCell<Env>>,
-    globals: Rc<RefCell<Env>>,
+    env: Env,
+    globals: Env,
     hops: HashMap<usize, usize>,
 }
 
@@ -23,10 +21,9 @@ impl Interpreter {
         let mut globals = Env::new();
         globals.define(Print.name(), Value::Call(Rc::new(Print)));
         globals.define(Clock.name(), Value::Call(Rc::new(Clock)));
-        let globals = Rc::new(RefCell::new(globals));
         Self {
-            env: Rc::clone(&globals),
-            globals: Rc::clone(&globals),
+            env: globals.clone(),
+            globals,
             hops: HashMap::new(),
         }
     }
@@ -56,14 +53,14 @@ impl Interpreter {
         })
     }
 
-    fn with_scope<F>(&mut self, env: Env, mut f: F) -> RunResult<Signal>
+    fn with_scope<F>(&mut self, env: Env, mut fun: F) -> RunResult<Signal>
     where
         F: FnMut(&mut Self) -> RunResult<Signal>,
     {
-        let prev = Rc::clone(&self.env);
-        self.env = Rc::new(RefCell::new(env));
+        let prev = self.env.clone();
+        self.env = env;
 
-        let res = f(self);
+        let res = fun(self);
 
         self.env = prev;
         res
@@ -94,12 +91,11 @@ impl Interpreter {
                     None
                 };
 
-                self.env.borrow_mut().define(name.to_owned(), Value::None);
+                self.env.define(name.to_owned(), Value::None);
 
                 if let Some(ref parent) = superclass {
-                    self.env = Rc::new(RefCell::new(Env::enclosing(&self.env)));
+                    self.env = Env::wrap(&self.env);
                     self.env
-                        .borrow_mut()
                         .define(String::from("super"), Value::Class(Rc::clone(parent)));
                 }
 
@@ -110,7 +106,7 @@ impl Interpreter {
                             fun_name.to_owned(),
                             params.to_vec(),
                             &body,
-                            &self.env,
+                            self.env.clone(),
                             fun_name == "init",
                         );
                         methods.insert(fun_name.to_owned(), Rc::new(fun));
@@ -120,25 +116,28 @@ impl Interpreter {
                 let has_superclass = superclass.is_some();
                 let class = LoxClass::new(name.to_owned(), superclass, methods);
                 if has_superclass {
-                    let inner = self.env.borrow().inner_env();
+                    let inner = self.env.unwrap();
                     self.env = inner;
                 }
                 self.env
-                    .borrow_mut()
                     .assign(name.to_owned(), Value::Class(Rc::new(class)));
             }
             Decl::Function(name, params, body, _) => {
-                let fun = Function::new(name.to_owned(), params.to_vec(), body, &self.env, false);
-                self.env
-                    .borrow_mut()
-                    .define(fun.name(), Value::Call(Rc::new(fun)));
+                let fun = Function::new(
+                    name.to_owned(),
+                    params.to_vec(),
+                    body,
+                    self.env.clone(),
+                    false,
+                );
+                self.env.define(fun.name(), Value::Call(Rc::new(fun)));
             }
             Decl::Let(name, init, _) => {
                 let value = match init {
                     Some(expr) => self.eval(expr)?,
                     None => Value::None,
                 };
-                self.env.borrow_mut().define(name.clone(), value);
+                self.env.define(name.clone(), value);
             }
             Decl::Statement(stmt) => return self.exec(stmt),
         }
@@ -148,13 +147,13 @@ impl Interpreter {
     fn exec(&mut self, stmt: &Stmt) -> RunResult<Signal> {
         match stmt {
             Stmt::For(init, cond, post, body) => {
-                return self.with_scope(Env::enclosing(&self.env), |this| {
+                return self.with_scope(Env::wrap(&self.env), |this| {
                     if let Some(decl) = init {
                         this.declare(decl)?;
                     }
 
                     while this.eval(cond)?.is_truthy() {
-                        let sig = this.exec_block(body, Env::enclosing(&this.env))?;
+                        let sig = this.exec_block(body, Env::wrap(&this.env))?;
                         match sig {
                             Signal::Ret(_) => return Ok(sig),
                             Signal::Break => break,
@@ -173,16 +172,16 @@ impl Interpreter {
             Stmt::If(branches, otherwise) => {
                 for (cond, then) in branches {
                     if self.eval(cond)?.is_truthy() {
-                        return self.exec_block(then, Env::enclosing(&self.env));
+                        return self.exec_block(then, Env::wrap(&self.env));
                     }
                 }
                 if let Some(body) = otherwise {
-                    return self.exec_block(body, Env::enclosing(&self.env));
+                    return self.exec_block(body, Env::wrap(&self.env));
                 }
             }
             Stmt::While(cond, body) => {
                 while self.eval(cond)?.is_truthy() {
-                    let sig = self.exec_block(&body, Env::enclosing(&self.env))?;
+                    let sig = self.exec_block(&body, Env::wrap(&self.env))?;
                     match sig {
                         Signal::Ret(_) => return Ok(sig),
                         Signal::Break => return Ok(Signal::None),
@@ -208,11 +207,8 @@ impl Interpreter {
                 let value = self.eval(expr)?;
 
                 let success = match self.hops.get(&var.id) {
-                    Some(dist) => self
-                        .env
-                        .borrow_mut()
-                        .assign_at(*dist, var.name.clone(), value),
-                    None => self.globals.borrow_mut().assign(var.name.clone(), value),
+                    Some(dist) => self.env.assign_at(*dist, var.name.clone(), value),
+                    None => self.globals.assign(var.name.clone(), value),
                 };
 
                 if !success {
@@ -229,7 +225,7 @@ impl Interpreter {
             Stmt::Expression(expr) => {
                 self.eval(expr)?;
             }
-            Stmt::Block(decls) => return self.exec_block(decls, Env::enclosing(&self.env)),
+            Stmt::Block(decls) => return self.exec_block(decls, Env::wrap(&self.env)),
         }
         Ok(Signal::None)
     }
@@ -353,11 +349,11 @@ impl Interpreter {
             Expr::Self_(var, line) => self.lookup_var(var, *line)?,
             Expr::Super(var, _, method, line) => {
                 let dist = self.hops.get(&var.id).cloned().unwrap();
-                let superclass = match self.env.borrow().get_at(dist, &var.name).unwrap() {
+                let superclass = match self.env.get_at(dist, &var.name).unwrap() {
                     Value::Class(clz) => clz,
                     _ => panic!(),
                 };
-                let instance = match self.env.borrow().get_at(dist - 1, "self").unwrap() {
+                let instance = match self.env.get_at(dist - 1, "self").unwrap() {
                     Value::Instance(inst) => inst,
                     _ => panic!(),
                 };
@@ -377,8 +373,8 @@ impl Interpreter {
 
     fn lookup_var(&mut self, var: &Var, line: usize) -> RunResult<Value> {
         let value = match self.hops.get(&var.id) {
-            Some(dist) => self.env.borrow().get_at(*dist, &var.name),
-            None => self.globals.borrow().search(&var.name),
+            Some(dist) => self.env.get_at(*dist, &var.name),
+            None => self.globals.get(&var.name),
         };
         value.ok_or_else(|| RuntimeError::UndefinedVar(line, var.name.clone()))
     }

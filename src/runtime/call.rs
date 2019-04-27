@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
@@ -93,7 +92,7 @@ pub struct Function {
     name: String,
     params: Vec<(String, usize)>,
     body: Rc<Vec<Decl>>,
-    closure: Rc<RefCell<Env>>,
+    closure: Env,
     is_init: bool,
 }
 
@@ -102,26 +101,26 @@ impl Function {
         name: String,
         params: Vec<(String, usize)>,
         body: &Rc<Vec<Decl>>,
-        env: &Rc<RefCell<Env>>,
+        closure: Env,
         is_init: bool,
     ) -> Self {
         Self {
             name,
             params,
             body: Rc::clone(body),
-            closure: Rc::clone(env),
+            closure,
             is_init,
         }
     }
 
     pub fn bind(&self, instance: LoxInstance) -> Self {
-        let mut env = Env::enclosing(&self.closure);
+        let mut env = Env::wrap(&self.closure);
         env.define(String::from("self"), Value::Instance(Rc::new(instance)));
         Self {
             name: self.name.to_owned(),
             params: self.params.to_vec(),
             body: Rc::clone(&self.body),
-            closure: Rc::new(RefCell::new(env)),
+            closure: env,
             is_init: self.is_init,
         }
     }
@@ -129,7 +128,7 @@ impl Function {
 
 impl Call for Function {
     fn call(&self, rt: &mut Interpreter, args: Vec<Value>) -> RunResult<Value> {
-        let mut env = Env::enclosing(&self.closure);
+        let mut env = Env::wrap(&self.closure);
         self.params.iter().zip(args).for_each(|(param, arg)| {
             env.define(param.0.to_owned(), arg);
         });
@@ -141,7 +140,7 @@ impl Call for Function {
         };
 
         Ok(if self.is_init {
-            self.closure.borrow().get_at(0, "self").unwrap()
+            self.closure.get_at(0, "self").unwrap()
         } else {
             result
         })
