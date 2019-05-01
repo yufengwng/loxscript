@@ -7,13 +7,15 @@ use crate::interpreter::Interpreter;
 
 mod call;
 mod env;
+mod fun;
 mod value;
 
-pub use self::call::{Class, Function, LoxClass};
+pub use self::call::{Class, LoxClass};
 pub use self::env::Env;
+pub use self::fun::LoxFunction;
 pub use self::value::{LoxInstance, Value};
 
-pub trait Call: fmt::Debug + fmt::Display {
+pub trait Call: fmt::Display {
     fn name(&self) -> String;
     fn arity(&self) -> usize;
     fn call(&self, rt: &mut Interpreter, args: Vec<Value>) -> RunResult<Value>;

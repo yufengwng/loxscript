@@ -6,7 +6,6 @@ use crate::runtime::RunResult;
 use crate::runtime::Value;
 use crate::Interpreter;
 
-#[derive(Debug)]
 pub struct Print;
 
 impl Call for Print {
@@ -30,7 +29,6 @@ impl fmt::Display for Print {
     }
 }
 
-#[derive(Debug)]
 pub struct Clock;
 
 impl Call for Clock {

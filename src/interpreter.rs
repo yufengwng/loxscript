@@ -5,7 +5,7 @@ use crate::ast::{BinOp, LogOp, UniOp};
 use crate::ast::{Decl, Expr, Primitive, Stmt, Var};
 use crate::runtime::Env;
 use crate::runtime::Value;
-use crate::runtime::{Call, Function, LoxClass, Signal};
+use crate::runtime::{Call, LoxClass, LoxFunction, Signal};
 use crate::runtime::{RunResult, RuntimeError};
 use crate::stdlib::{Clock, Print};
 use crate::ResolvedProgram;
@@ -53,15 +53,13 @@ impl Interpreter {
         })
     }
 
-    fn with_scope<F>(&mut self, env: Env, mut fun: F) -> RunResult<Signal>
+    fn with_scope<F>(&mut self, env: Env, mut func: F) -> RunResult<Signal>
     where
         F: FnMut(&mut Self) -> RunResult<Signal>,
     {
         let prev = self.env.clone();
         self.env = env;
-
-        let res = fun(self);
-
+        let res = func(self);
         self.env = prev;
         res
     }
@@ -100,17 +98,10 @@ impl Interpreter {
                 }
 
                 let mut methods = HashMap::new();
-                for method in method_decls.iter() {
-                    if let Decl::Function(fun_name, params, body, _) = method {
-                        let fun = Function::new(
-                            fun_name.to_owned(),
-                            params.to_vec(),
-                            &body,
-                            self.env.clone(),
-                            fun_name == "init",
-                        );
-                        methods.insert(fun_name.to_owned(), Rc::new(fun));
-                    }
+                for decl in method_decls {
+                    let is_init = decl.name == "init";
+                    let fun = LoxFunction::new(Rc::clone(decl), self.env.clone(), is_init);
+                    methods.insert(fun.name(), fun);
                 }
 
                 let has_superclass = superclass.is_some();
@@ -122,15 +113,9 @@ impl Interpreter {
                 self.env
                     .assign(name.to_owned(), Value::Class(Rc::new(class)));
             }
-            Decl::Function(name, params, body, _) => {
-                let fun = Function::new(
-                    name.to_owned(),
-                    params.to_vec(),
-                    body,
-                    self.env.clone(),
-                    false,
-                );
-                self.env.define(fun.name(), Value::Call(Rc::new(fun)));
+            Decl::Function(decl) => {
+                let fun = LoxFunction::new(Rc::clone(decl), self.env.clone(), false);
+                self.env.define(fun.name(), Value::Fun(fun));
             }
             Decl::Let(name, init, _) => {
                 let value = match init {
@@ -323,19 +308,39 @@ impl Interpreter {
                     args.push(self.eval(arg)?);
                 }
 
-                let fun = match callee {
-                    Value::Class(class) => class,
-                    Value::Call(fun) => fun,
-                    _ => {
-                        return Err(RuntimeError::NotCallable(*line));
+                match callee {
+                    Value::Class(class) => {
+                        if args.len() != class.arity() {
+                            return Err(RuntimeError::ArityMismatch(
+                                *line,
+                                class.arity(),
+                                args.len(),
+                            ));
+                        }
+                        class.call(self, args)?
                     }
-                };
-
-                if args.len() != fun.arity() {
-                    return Err(RuntimeError::ArityMismatch(*line, fun.arity(), args.len()));
+                    Value::Call(fun) => {
+                        if args.len() != fun.arity() {
+                            return Err(RuntimeError::ArityMismatch(
+                                *line,
+                                fun.arity(),
+                                args.len(),
+                            ));
+                        }
+                        fun.call(self, args)?
+                    }
+                    Value::Fun(fun) => {
+                        if args.len() != fun.arity() {
+                            return Err(RuntimeError::ArityMismatch(
+                                *line,
+                                fun.arity(),
+                                args.len(),
+                            ));
+                        }
+                        fun.call(self, args)?
+                    }
+                    _ => return Err(RuntimeError::NotCallable(*line)),
                 }
-
-                fun.call(self, args)?
             }
             Expr::Get(object, name, line) => {
                 return match self.eval(object)? {
@@ -360,11 +365,7 @@ impl Interpreter {
                 return superclass
                     .inner()
                     .find_method(method)
-                    .map(|fun| {
-                        let fun = fun.bind(instance.share());
-                        let fun: Rc<Call> = Rc::new(fun);
-                        Value::Call(fun)
-                    })
+                    .map(|fun| Value::Fun(fun.bind(instance.share())))
                     .ok_or_else(|| RuntimeError::UndefinedProp(*line, method.to_owned()));
             }
             Expr::Group(ref inner) => self.eval(inner)?,

@@ -77,10 +77,24 @@ pub enum Stmt {
     Block(Vec<Decl>),
 }
 
+pub type Body = Vec<Decl>;
+
+pub struct Param {
+    pub name: String,
+    pub line: usize,
+}
+
+pub struct FunDecl {
+    pub name: String,
+    pub params: Vec<Param>,
+    pub body: Body,
+    pub line: usize,
+}
+
 /// Language items that introduce name bindings.
 pub enum Decl {
-    Class(String, Option<Expr>, Rc<Vec<Decl>>, usize),
-    Function(String, Vec<(String, usize)>, Rc<Vec<Decl>>, usize),
+    Class(String, Option<Expr>, Vec<Rc<FunDecl>>, usize),
+    Function(Rc<FunDecl>),
     Let(String, Option<Expr>, usize),
     Statement(Stmt),
 }

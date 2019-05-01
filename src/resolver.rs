@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::error;
 use std::fmt;
 
+use crate::ast::FunDecl;
 use crate::ast::{Decl, Expr, Stmt};
 use crate::ResolvedProgram;
 
@@ -160,16 +161,19 @@ impl Resolver {
         }
     }
 
-    fn resolve_function(&mut self, params: &[(String, usize)], body: &[Decl], kind: FunType) {
+    fn resolve_function(&mut self, decl: &FunDecl, kind: FunType) {
+        self.declare(&decl.name, decl.line);
+        self.define(&decl.name);
+
         let prev = self.curr_fun.clone();
         self.curr_fun = kind;
 
         self.begin_scope();
-        for (param, line) in params {
-            self.declare(param, *line);
-            self.define(param);
+        for param in &decl.params {
+            self.declare(&param.name, param.line);
+            self.define(&param.name);
         }
-        self.resolve_all(body);
+        self.resolve_all(&decl.body);
         self.end_scope();
 
         self.curr_fun = prev;
@@ -205,17 +209,13 @@ impl Resolver {
                 self.begin_scope();
                 self.define("self");
 
-                for method in methods.iter() {
-                    if let Decl::Function(fun_name, params, body, fun_line) = method {
-                        let kind = if fun_name == "init" {
-                            FunType::Init
-                        } else {
-                            FunType::Method
-                        };
-                        self.declare(fun_name, *fun_line);
-                        self.define(fun_name);
-                        self.resolve_function(params, body, kind);
-                    }
+                for method in methods {
+                    let kind = if method.name == "init" {
+                        FunType::Init
+                    } else {
+                        FunType::Method
+                    };
+                    self.resolve_function(method, kind);
                 }
 
                 self.end_scope();
@@ -224,10 +224,8 @@ impl Resolver {
                 }
                 self.curr_class = prev;
             }
-            Decl::Function(name, params, body, line) => {
-                self.declare(name, *line);
-                self.define(name);
-                self.resolve_function(params, body, FunType::Function);
+            Decl::Function(decl) => {
+                self.resolve_function(decl, FunType::Function);
             }
             Decl::Let(name, init, line) => {
                 self.declare(name, *line);

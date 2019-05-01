@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use crate::ast::{BinOp, LogOp, UniOp};
 use crate::ast::{Decl, Expr, Primitive, Stmt, Var};
+use crate::ast::{FunDecl, Param};
 use crate::ast::{Span, Token};
 use crate::ParsedProgram;
 
@@ -101,6 +102,7 @@ impl Parser {
             self.class_declaration()
         } else if self.matches(&Token::Fun) {
             self.fun_declaration("function")
+                .map(|decl| Decl::Function(Rc::new(decl)))
         } else if self.matches(&Token::Let) {
             self.let_declaration()
         } else {
@@ -122,14 +124,14 @@ impl Parser {
 
         let mut methods = Vec::new();
         while !self.is_at_end() && !self.check(&Token::Rbrace) {
-            methods.push(self.fun_declaration("method")?);
+            methods.push(Rc::new(self.fun_declaration("method")?));
         }
 
         self.consume(&Token::Rbrace, "expected '}' after class body")?;
-        Ok(Decl::Class(name, superclass, Rc::new(methods), line))
+        Ok(Decl::Class(name, superclass, methods, line))
     }
 
-    fn fun_declaration(&mut self, kind: &'static str) -> Result<Decl, ParseError> {
+    fn fun_declaration(&mut self, kind: &'static str) -> Result<FunDecl, ParseError> {
         let msg = format!("expected {} name", kind);
         let (name, line) = self.consume_ident(&msg)?;
 
@@ -138,14 +140,14 @@ impl Parser {
 
         let mut params = Vec::new();
         if !self.check(&Token::Rparen) {
-            let param = self.consume_ident("expected parameter name")?;
-            params.push(param);
+            let (name, line) = self.consume_ident("expected parameter name")?;
+            params.push(Param { name, line });
             while self.matches(&Token::Comma) {
                 if params.len() >= MAX_FN_ARITY {
                     self.log_err(ParseError::MaxParams(self.peek().clone()));
                 }
-                let param = self.consume_ident("expected parameter name")?;
-                params.push(param);
+                let (name, line) = self.consume_ident("expected parameter name")?;
+                params.push(Param { name, line });
             }
         }
 
@@ -153,9 +155,14 @@ impl Parser {
 
         let msg = format!("expected '{{' before {} body", kind);
         self.consume(&Token::Lbrace, &msg)?;
-
         let body = self.block()?;
-        Ok(Decl::Function(name, params, Rc::new(body), line))
+
+        Ok(FunDecl {
+            name,
+            params,
+            body,
+            line,
+        })
     }
 
     fn let_declaration(&mut self) -> Result<Decl, ParseError> {

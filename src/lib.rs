@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 mod ast;
 mod runtime;
 mod stdlib;
@@ -25,5 +27,5 @@ pub struct ParsedProgram {
 pub struct ResolvedProgram {
     pub errored: bool,
     pub decls: Vec<ast::Decl>,
-    pub hops: std::collections::HashMap<usize, usize>,
+    pub hops: HashMap<usize, usize>,
 }

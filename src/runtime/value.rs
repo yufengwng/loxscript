@@ -3,15 +3,16 @@ use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
-use crate::runtime::Call;
+use crate::runtime::{Call, LoxFunction};
 use crate::runtime::{Class, LoxClass};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Value {
     None,
     Bool(bool),
     Num(f64),
     Str(String),
+    Fun(LoxFunction),
     Call(Rc<Call>),
     Class(Rc<LoxClass>),
     Instance(Rc<LoxInstance>),
@@ -34,6 +35,7 @@ impl PartialEq for Value {
             (Value::Bool(lhs), Value::Bool(rhs)) => lhs == rhs,
             (Value::Num(lhs), Value::Num(rhs)) => lhs == rhs,
             (Value::Str(lhs), Value::Str(rhs)) => lhs == rhs,
+            (Value::Fun(lhs), Value::Fun(rhs)) => lhs == rhs,
             (Value::Class(lhs), Value::Class(rhs)) => Rc::ptr_eq(lhs, rhs),
             (Value::Instance(lhs), Value::Instance(rhs)) => Rc::ptr_eq(lhs, rhs),
             (Value::Call(lhs), Value::Call(rhs)) => Rc::ptr_eq(lhs, rhs),
@@ -49,6 +51,7 @@ impl fmt::Display for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::Num(n) => write!(f, "{}", n),
             Value::Str(s) => write!(f, "{}", s),
+            Value::Fun(fun) => write!(f, "{}", fun),
             Value::Class(class) => write!(f, "{}", class),
             Value::Instance(inst) => write!(f, "{}", inst),
             Value::Call(fun) => write!(f, "{}", fun),
