@@ -11,47 +11,41 @@ use crate::runtime::Value;
 use crate::Interpreter;
 
 #[derive(Clone)]
-pub struct LoxFunction {
-    ptr: Rc<Function>,
-}
+pub struct LoxFunction(Rc<Function>);
 
 impl LoxFunction {
     pub fn new(decl: Rc<FunDecl>, closure: Env, is_init: bool) -> Self {
-        Self {
-            ptr: Rc::new(Function::new(decl, closure, is_init)),
-        }
+        Self(Rc::new(Function::new(decl, closure, is_init)))
     }
 
     pub fn bind(&self, instance: LoxInstance) -> Self {
-        Self {
-            ptr: Rc::new(self.ptr.bind(instance)),
-        }
+        Self(Rc::new(self.0.bind(instance)))
     }
 }
 
 impl Call for LoxFunction {
     fn name(&self) -> String {
-        self.ptr.decl.name.to_owned()
+        self.0.decl.name.to_owned()
     }
 
     fn arity(&self) -> usize {
-        self.ptr.decl.params.len()
+        self.0.decl.params.len()
     }
 
     fn call(&self, rt: &mut Interpreter, args: Vec<Value>) -> RunResult<Value> {
-        self.ptr.call(rt, args)
+        self.0.call(rt, args)
     }
 }
 
 impl PartialEq for LoxFunction {
     fn eq(&self, other: &LoxFunction) -> bool {
-        Rc::ptr_eq(&self.ptr, &other.ptr)
+        Rc::ptr_eq(&self.0, &other.0)
     }
 }
 
 impl fmt::Display for LoxFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<fn {}>", self.ptr.decl.name)
+        write!(f, "<fn {}>", self.0.decl.name)
     }
 }
 
@@ -72,7 +66,7 @@ impl Function {
 
     fn bind(&self, instance: LoxInstance) -> Self {
         let mut env = Env::wrap(&self.closure);
-        env.define(String::from("self"), Value::Instance(Rc::new(instance)));
+        env.define(String::from("self"), Value::Instance(instance));
         Self {
             decl: Rc::clone(&self.decl),
             closure: env,

@@ -77,7 +77,7 @@ impl Interpreter {
                 let superclass = if let Some(super_expr) = superclass {
                     let value = self.eval(super_expr)?;
                     match value {
-                        Value::Class(ref class_ptr) => Some(Rc::clone(class_ptr)),
+                        Value::Class(parent) => Some(parent),
                         _ => {
                             return Err(RuntimeError::NotSuperclass(match super_expr {
                                 Expr::Variable(_, line) => *line,
@@ -94,7 +94,7 @@ impl Interpreter {
                 if let Some(ref parent) = superclass {
                     self.env = Env::wrap(&self.env);
                     self.env
-                        .define(String::from("super"), Value::Class(Rc::clone(parent)));
+                        .define(String::from("super"), Value::Class(parent.clone()));
                 }
 
                 let mut methods = HashMap::new();
@@ -110,8 +110,7 @@ impl Interpreter {
                     let inner = self.env.unwrap();
                     self.env = inner;
                 }
-                self.env
-                    .assign(name.to_owned(), Value::Class(Rc::new(class)));
+                self.env.assign(name.to_owned(), Value::Class(class));
             }
             Decl::Function(decl) => {
                 let fun = LoxFunction::new(Rc::clone(decl), self.env.clone(), false);
@@ -363,9 +362,8 @@ impl Interpreter {
                     _ => panic!(),
                 };
                 return superclass
-                    .inner()
                     .find_method(method)
-                    .map(|fun| Value::Fun(fun.bind(instance.share())))
+                    .map(|fun| Value::Fun(fun.bind(instance)))
                     .ok_or_else(|| RuntimeError::UndefinedProp(*line, method.to_owned()));
             }
             Expr::Group(ref inner) => self.eval(inner)?,

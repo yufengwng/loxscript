@@ -5,15 +5,15 @@ use std::fmt;
 
 use crate::interpreter::Interpreter;
 
-mod call;
 mod env;
 mod fun;
+mod obj;
 mod value;
 
-pub use self::call::{Class, LoxClass};
 pub use self::env::Env;
 pub use self::fun::LoxFunction;
-pub use self::value::{LoxInstance, Value};
+pub use self::obj::{LoxClass, LoxInstance};
+pub use self::value::Value;
 
 pub trait Call: fmt::Display {
     fn name(&self) -> String;

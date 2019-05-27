@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-mod ast;
-mod runtime;
-mod stdlib;
+pub mod ast;
+pub mod runtime;
+pub mod stdlib;
 
 mod interpreter;
 mod lexer;
