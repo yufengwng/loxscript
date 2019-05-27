@@ -115,7 +115,7 @@ impl Parser {
 
         let superclass = if self.matches(&Token::Lt) {
             let (name, line) = self.consume_ident("expected superclass name")?;
-            Some(Expr::Variable(Var::new(next_var_id(), name), line))
+            Some(Var::new(next_var_id(), name, line))
         } else {
             None
         };
@@ -128,7 +128,7 @@ impl Parser {
         }
 
         self.consume(&Token::Rbrace, "expected '}' after class body")?;
-        Ok(Decl::Class(name, superclass, methods, line))
+        Ok(Decl::Class(line, name, superclass, methods))
     }
 
     fn fun_declaration(&mut self, kind: &'static str) -> Result<FunDecl, ParseError> {
@@ -175,7 +175,7 @@ impl Parser {
         };
 
         self.consume(&Token::Semi, "expected ';' after variable declaration")?;
-        Ok(Decl::Let(name, init, line))
+        Ok(Decl::Let(line, name, init))
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
@@ -210,17 +210,17 @@ impl Parser {
         let equals = self.advance().clone();
         let value = self.expression()?;
         match expr {
-            Expr::Variable(var, line) => {
+            Expr::Variable(var) => {
                 if has_semi {
                     self.consume(&Token::Semi, "expected ';' after assignment")?;
                 }
-                Ok(Stmt::Assignment(var, value, line))
+                Ok(Stmt::Assignment(var, value))
             }
-            Expr::Get(object, name, line) => {
+            Expr::Get(line, object, name) => {
                 if has_semi {
                     self.consume(&Token::Semi, "expected ';' after assignment")?;
                 }
-                Ok(Stmt::Set(*object, name, value, line))
+                Ok(Stmt::Set(line, *object, name, value))
             }
             _ => {
                 self.log_err(ParseError::InvalidAssignTarget(equals));
@@ -251,7 +251,7 @@ impl Parser {
 
         let cond_expr = if self.check(&Token::Semi) {
             let line = self.advance().line;
-            Expr::Literal(Primitive::Bool(true, line))
+            Expr::Literal(line, Primitive::Bool(true))
         } else {
             let expr = self.expression()?;
             self.consume(&Token::Semi, "expected ';' after loop condition")?;
@@ -315,7 +315,7 @@ impl Parser {
             None
         };
         self.consume(&Token::Semi, "expected ';' after return value")?;
-        Ok(Stmt::Return(value, line))
+        Ok(Stmt::Return(line, value))
     }
 
     fn block(&mut self) -> Result<Vec<Decl>, ParseError> {
@@ -334,9 +334,9 @@ impl Parser {
     fn logical_or(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.logical_and()?;
 
-        while let Some(op) = self.consume_or_op() {
+        while let Some((op, line)) = self.consume_or_op() {
             let rhs = self.logical_and()?;
-            expr = Expr::Logical(Box::new(expr), op, Box::new(rhs));
+            expr = Expr::Logical(line, Box::new(expr), op, Box::new(rhs));
         }
 
         Ok(expr)
@@ -345,9 +345,9 @@ impl Parser {
     fn logical_and(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.equality()?;
 
-        while let Some(op) = self.consume_and_op() {
+        while let Some((op, line)) = self.consume_and_op() {
             let rhs = self.equality()?;
-            expr = Expr::Logical(Box::new(expr), op, Box::new(rhs));
+            expr = Expr::Logical(line, Box::new(expr), op, Box::new(rhs));
         }
 
         Ok(expr)
@@ -356,9 +356,9 @@ impl Parser {
     fn equality(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.comparison()?;
 
-        while let Some(op) = self.consume_equality_op() {
+        while let Some((op, line)) = self.consume_equality_op() {
             let rhs = self.comparison()?;
-            expr = Expr::Binary(Box::new(expr), op, Box::new(rhs));
+            expr = Expr::Binary(line, Box::new(expr), op, Box::new(rhs));
         }
 
         Ok(expr)
@@ -367,9 +367,9 @@ impl Parser {
     fn comparison(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.addition()?;
 
-        while let Some(op) = self.consume_compare_op() {
+        while let Some((op, line)) = self.consume_compare_op() {
             let rhs = self.addition()?;
-            expr = Expr::Binary(Box::new(expr), op, Box::new(rhs));
+            expr = Expr::Binary(line, Box::new(expr), op, Box::new(rhs));
         }
 
         Ok(expr)
@@ -378,9 +378,9 @@ impl Parser {
     fn addition(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.multiply()?;
 
-        while let Some(op) = self.consume_additive_op() {
+        while let Some((op, line)) = self.consume_additive_op() {
             let rhs = self.multiply()?;
-            expr = Expr::Binary(Box::new(expr), op, Box::new(rhs));
+            expr = Expr::Binary(line, Box::new(expr), op, Box::new(rhs));
         }
 
         Ok(expr)
@@ -389,18 +389,18 @@ impl Parser {
     fn multiply(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.unary()?;
 
-        while let Some(op) = self.consume_multiplicative_op() {
+        while let Some((op, line)) = self.consume_multiplicative_op() {
             let rhs = self.unary()?;
-            expr = Expr::Binary(Box::new(expr), op, Box::new(rhs));
+            expr = Expr::Binary(line, Box::new(expr), op, Box::new(rhs));
         }
 
         Ok(expr)
     }
 
     fn unary(&mut self) -> Result<Expr, ParseError> {
-        if let Some(op) = self.consume_unary_op() {
+        if let Some((op, line)) = self.consume_unary_op() {
             let rhs = self.unary()?;
-            Ok(Expr::Unary(op, Box::new(rhs)))
+            Ok(Expr::Unary(line, op, Box::new(rhs)))
         } else {
             self.parse_call()
         }
@@ -413,7 +413,7 @@ impl Parser {
                 expr = self.finish_call(expr)?;
             } else if self.matches(&Token::Dot) {
                 let (name, line) = self.consume_ident("expected property name after '.'")?;
-                expr = Expr::Get(Box::new(expr), name, line);
+                expr = Expr::Get(line, Box::new(expr), name);
             } else {
                 break;
             }
@@ -433,29 +433,28 @@ impl Parser {
             }
         }
         let paren = self.consume(&Token::Rparen, "expected ')' after arguments")?;
-        Ok(Expr::Call(Box::new(expr), args, paren.line))
+        Ok(Expr::Call(paren.line, Box::new(expr), args))
     }
 
     fn primary(&mut self) -> Result<Expr, ParseError> {
         let curr = self.peek().clone();
 
         let expr = match curr.token {
-            Token::None => Expr::Literal(Primitive::None(curr.line)),
-            Token::True => Expr::Literal(Primitive::Bool(true, curr.line)),
-            Token::False => Expr::Literal(Primitive::Bool(false, curr.line)),
-            Token::Num(n) => Expr::Literal(Primitive::Num(n, curr.line)),
-            Token::Str(s) => Expr::Literal(Primitive::Str(s, curr.line)),
-            Token::Ident(s) => Expr::Variable(Var::new(next_var_id(), s), curr.line),
-            Token::Self_ => Expr::Self_(Var::new(next_var_id(), String::from("self")), curr.line),
+            Token::None => Expr::Literal(curr.line, Primitive::None),
+            Token::True => Expr::Literal(curr.line, Primitive::Bool(true)),
+            Token::False => Expr::Literal(curr.line, Primitive::Bool(false)),
+            Token::Num(n) => Expr::Literal(curr.line, Primitive::Num(n)),
+            Token::Str(s) => Expr::Literal(curr.line, Primitive::Str(s)),
+            Token::Ident(s) => Expr::Variable(Var::new(next_var_id(), s, curr.line)),
+            Token::Self_ => Expr::Self_(Var::new(next_var_id(), String::from("self"), curr.line)),
             Token::Super => {
                 self.advance();
                 self.consume(&Token::Dot, "expected '.' after 'super'")?;
                 let (method, line) = self.consume_ident("expected superclass method name")?;
                 return Ok(Expr::Super(
-                    Var::new(next_var_id(), String::from("super")),
-                    curr.line,
-                    method,
+                    Var::new(next_var_id(), String::from("super"), curr.line),
                     line,
+                    method,
                 ));
             }
             Token::Lparen => {
@@ -517,117 +516,124 @@ impl Parser {
         Err(ParseError::NotConsumed(self.peek().clone(), msg.to_owned()))
     }
 
-    fn consume_unary_op(&mut self) -> Option<UniOp> {
+    fn consume_unary_op(&mut self) -> Option<(UniOp, usize)> {
         if self.is_at_end() {
             return None;
         }
 
         let curr = self.peek();
         let op = match &curr.token {
-            Token::Minus => UniOp::Neg(curr.line),
-            Token::Not => UniOp::Not(curr.line),
+            Token::Minus => UniOp::Neg,
+            Token::Not => UniOp::Not,
             _ => return None,
         };
+        let line = curr.line;
 
         self.advance();
-        Some(op)
+        Some((op, line))
     }
 
-    fn consume_multiplicative_op(&mut self) -> Option<BinOp> {
+    fn consume_multiplicative_op(&mut self) -> Option<(BinOp, usize)> {
         if self.is_at_end() {
             return None;
         }
 
         let curr = self.peek();
         let op = match &curr.token {
-            Token::Star => BinOp::Mul(curr.line),
-            Token::Slash => BinOp::Div(curr.line),
-            Token::Percent => BinOp::Rem(curr.line),
+            Token::Star => BinOp::Mul,
+            Token::Slash => BinOp::Div,
+            Token::Percent => BinOp::Rem,
             _ => return None,
         };
+        let line = curr.line;
 
         self.advance();
-        Some(op)
+        Some((op, line))
     }
 
-    fn consume_additive_op(&mut self) -> Option<BinOp> {
+    fn consume_additive_op(&mut self) -> Option<(BinOp, usize)> {
         if self.is_at_end() {
             return None;
         }
 
         let curr = self.peek();
         let op = match &curr.token {
-            Token::Plus => BinOp::Add(curr.line),
-            Token::Minus => BinOp::Sub(curr.line),
+            Token::Plus => BinOp::Add,
+            Token::Minus => BinOp::Sub,
             _ => return None,
         };
+        let line = curr.line;
 
         self.advance();
-        Some(op)
+        Some((op, line))
     }
 
-    fn consume_compare_op(&mut self) -> Option<BinOp> {
+    fn consume_compare_op(&mut self) -> Option<(BinOp, usize)> {
         if self.is_at_end() {
             return None;
         }
 
         let curr = self.peek();
         let op = match &curr.token {
-            Token::Lt => BinOp::Lt(curr.line),
-            Token::LtEq => BinOp::LtEq(curr.line),
-            Token::Gt => BinOp::Gt(curr.line),
-            Token::GtEq => BinOp::GtEq(curr.line),
+            Token::Lt => BinOp::Lt,
+            Token::LtEq => BinOp::LtEq,
+            Token::Gt => BinOp::Gt,
+            Token::GtEq => BinOp::GtEq,
             _ => return None,
         };
+        let line = curr.line;
 
         self.advance();
-        Some(op)
+        Some((op, line))
     }
 
-    fn consume_equality_op(&mut self) -> Option<BinOp> {
+    fn consume_equality_op(&mut self) -> Option<(BinOp, usize)> {
         if self.is_at_end() {
             return None;
         }
 
         let curr = self.peek();
         let op = match &curr.token {
-            Token::EqEq => BinOp::EqEq(curr.line),
-            Token::NotEq => BinOp::NotEq(curr.line),
+            Token::EqEq => BinOp::EqEq,
+            Token::NotEq => BinOp::NotEq,
             _ => return None,
         };
+        let line = curr.line;
 
         self.advance();
-        Some(op)
+        Some((op, line))
     }
 
-    fn consume_and_op(&mut self) -> Option<LogOp> {
+    fn consume_and_op(&mut self) -> Option<(LogOp, usize)> {
         if self.is_at_end() {
             return None;
         }
 
         let curr = self.peek();
         let op = match &curr.token {
-            Token::And => LogOp::And(curr.line),
+            Token::And => LogOp::And,
             _ => return None,
         };
+        let line = curr.line;
 
         self.advance();
-        Some(op)
+        Some((op, line))
     }
 
-    fn consume_or_op(&mut self) -> Option<LogOp> {
+    fn consume_or_op(&mut self) -> Option<(LogOp, usize)> {
         if self.is_at_end() {
             return None;
         }
 
         let curr = self.peek();
         let op = match &curr.token {
-            Token::Or => LogOp::Or(curr.line),
+            Token::Or => LogOp::Or,
             _ => return None,
         };
+        let line = curr.line;
 
         self.advance();
-        Some(op)
+        Some((op, line))
     }
 
     fn log_err(&mut self, err: ParseError) {

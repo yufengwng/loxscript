@@ -90,12 +90,6 @@ pub struct Resolver {
     curr_class: ClassType,
 }
 
-impl Default for Resolver {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Resolver {
     pub fn new() -> Self {
         Self {
@@ -187,21 +181,19 @@ impl Resolver {
 
     fn resolve_declare(&mut self, decl: &Decl) {
         match decl {
-            Decl::Class(name, superclass, methods, line) => {
+            Decl::Class(line, name, superclass_var, method_decls) => {
                 let prev = self.curr_class.clone();
                 self.curr_class = ClassType::Class;
 
                 self.declare(name, *line);
                 self.define(name);
 
-                if let Some(super_expr) = superclass {
-                    if let Expr::Variable(var, _) = super_expr {
-                        if var.name == *name {
-                            self.log_err(ResolveError::InheritSelf(*line, var.name.to_owned()));
-                        }
+                if let Some(var) = superclass_var {
+                    if var.name == *name {
+                        self.log_err(ResolveError::InheritSelf(var.line, var.name.to_owned()));
                     }
                     self.curr_class = ClassType::Subclass;
-                    self.resolve_expression(super_expr);
+                    self.save_hops(var.id, &var.name);
                     self.begin_scope();
                     self.define("super");
                 }
@@ -209,7 +201,7 @@ impl Resolver {
                 self.begin_scope();
                 self.define("self");
 
-                for method in methods {
+                for method in method_decls {
                     let kind = if method.name == "init" {
                         FunType::Init
                     } else {
@@ -219,7 +211,7 @@ impl Resolver {
                 }
 
                 self.end_scope();
-                if superclass.is_some() {
+                if superclass_var.is_some() {
                     self.end_scope();
                 }
                 self.curr_class = prev;
@@ -227,7 +219,7 @@ impl Resolver {
             Decl::Function(decl) => {
                 self.resolve_function(decl, FunType::Function);
             }
-            Decl::Let(name, init, line) => {
+            Decl::Let(line, name, init) => {
                 self.declare(name, *line);
                 if let Some(expr) = init {
                     self.resolve_expression(expr);
@@ -267,7 +259,7 @@ impl Resolver {
             }
             Stmt::Break(_) => {}
             Stmt::Continue(_) => {}
-            Stmt::Return(expr, line) => {
+            Stmt::Return(line, expr) => {
                 if self.curr_fun == FunType::None {
                     self.log_err(ResolveError::TopReturn(*line));
                 }
@@ -278,11 +270,11 @@ impl Resolver {
                     self.resolve_expression(e);
                 }
             }
-            Stmt::Assignment(var, expr, _) => {
+            Stmt::Assignment(var, expr) => {
                 self.resolve_expression(expr);
                 self.save_hops(var.id, &var.name);
             }
-            Stmt::Set(object, _, value, _) => {
+            Stmt::Set(_, object, _, value) => {
                 self.resolve_expression(value);
                 self.resolve_expression(object);
             }
@@ -293,44 +285,44 @@ impl Resolver {
 
     fn resolve_expression(&mut self, expr: &Expr) {
         match expr {
-            Expr::Literal(_) => {}
-            Expr::Unary(_, expr) => {
+            Expr::Literal(_, _) => {}
+            Expr::Unary(_, _, expr) => {
                 self.resolve_expression(expr);
             }
-            Expr::Binary(lhs, _, rhs) => {
+            Expr::Binary(_, lhs, _, rhs) => {
                 self.resolve_expression(lhs);
                 self.resolve_expression(rhs);
             }
-            Expr::Logical(lhs, _, rhs) => {
+            Expr::Logical(_, lhs, _, rhs) => {
                 self.resolve_expression(lhs);
                 self.resolve_expression(rhs);
             }
-            Expr::Call(expr, arguments, _) => {
-                self.resolve_expression(expr);
+            Expr::Call(_, callee, arguments) => {
+                self.resolve_expression(callee);
                 for arg in arguments {
                     self.resolve_expression(arg);
                 }
             }
-            Expr::Get(object, _, _) => {
+            Expr::Get(_, object, _) => {
                 self.resolve_expression(object);
             }
-            Expr::Variable(var, line) => {
+            Expr::Variable(var) => {
                 if let Some(false) = self.scopes.last().and_then(|map| map.get(&var.name)) {
-                    self.log_err(ResolveError::OwnInitializer(*line, var.name.clone()));
+                    self.log_err(ResolveError::OwnInitializer(var.line, var.name.clone()));
                 }
                 self.save_hops(var.id, &var.name);
             }
-            Expr::Self_(var, line) => {
+            Expr::Self_(var) => {
                 if ClassType::None == self.curr_class {
-                    self.log_err(ResolveError::InvalidSelf(*line));
+                    self.log_err(ResolveError::InvalidSelf(var.line));
                 } else {
                     self.save_hops(var.id, &var.name);
                 }
             }
-            Expr::Super(var, line, _, _) => {
+            Expr::Super(var, _, _) => {
                 match self.curr_class {
-                    ClassType::None => self.log_err(ResolveError::SuperNotClass(*line)),
-                    ClassType::Class => self.log_err(ResolveError::SuperNotSub(*line)),
+                    ClassType::None => self.log_err(ResolveError::SuperNotClass(var.line)),
+                    ClassType::Class => self.log_err(ResolveError::SuperNotSub(var.line)),
                     ClassType::Subclass => {}
                 }
                 self.save_hops(var.id, &var.name);

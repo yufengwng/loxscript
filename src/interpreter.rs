@@ -73,17 +73,11 @@ impl Interpreter {
 
     fn declare(&mut self, decl: &Decl) -> RunResult<Signal> {
         match decl {
-            Decl::Class(name, superclass, method_decls, _) => {
-                let superclass = if let Some(super_expr) = superclass {
-                    let value = self.eval(super_expr)?;
-                    match value {
+            Decl::Class(_, name, superclass_var, method_decls) => {
+                let superclass = if let Some(var) = superclass_var {
+                    match self.lookup_var(var)? {
                         Value::Class(parent) => Some(parent),
-                        _ => {
-                            return Err(RuntimeError::NotSuperclass(match super_expr {
-                                Expr::Variable(_, line) => *line,
-                                _ => 0,
-                            }));
-                        }
+                        _ => return Err(RuntimeError::NotSuperclass(var.line)),
                     }
                 } else {
                     None
@@ -104,19 +98,19 @@ impl Interpreter {
                     methods.insert(fun.name(), fun);
                 }
 
-                let has_superclass = superclass.is_some();
-                let class = LoxClass::new(name.to_owned(), superclass, methods);
-                if has_superclass {
+                if superclass.is_some() {
                     let inner = self.env.unwrap();
                     self.env = inner;
                 }
+
+                let class = LoxClass::new(name.to_owned(), superclass, methods);
                 self.env.assign(name.to_owned(), Value::Class(class));
             }
             Decl::Function(decl) => {
                 let fun = LoxFunction::new(Rc::clone(decl), self.env.clone(), false);
                 self.env.define(fun.name(), Value::Fun(fun));
             }
-            Decl::Let(name, init, _) => {
+            Decl::Let(_, name, init) => {
                 let value = match init {
                     Some(expr) => self.eval(expr)?,
                     None => Value::None,
@@ -180,14 +174,14 @@ impl Interpreter {
             Stmt::Continue(_) => {
                 return Ok(Signal::Cont);
             }
-            Stmt::Return(expr, _) => {
+            Stmt::Return(_, expr) => {
                 let value = match expr {
                     Some(e) => self.eval(e)?,
                     None => Value::None,
                 };
                 return Ok(Signal::Ret(value));
             }
-            Stmt::Assignment(var, expr, line) => {
+            Stmt::Assignment(var, expr) => {
                 let value = self.eval(expr)?;
 
                 let success = match self.hops.get(&var.id) {
@@ -196,10 +190,10 @@ impl Interpreter {
                 };
 
                 if !success {
-                    return Err(RuntimeError::UndefinedVar(*line, var.name.clone()));
+                    return Err(RuntimeError::UndefinedVar(var.line, var.name.clone()));
                 }
             }
-            Stmt::Set(object, name, value, line) => match self.eval(object)? {
+            Stmt::Set(line, object, name, value) => match self.eval(object)? {
                 Value::Instance(obj) => {
                     let value = self.eval(value)?;
                     obj.set(name.to_owned(), value);
@@ -216,81 +210,81 @@ impl Interpreter {
 
     fn eval(&mut self, expr: &Expr) -> RunResult<Value> {
         Ok(match expr {
-            Expr::Literal(ref prim) => match prim {
-                Primitive::None(_) => Value::None,
-                Primitive::Bool(b, _) => Value::Bool(*b),
-                Primitive::Num(n, _) => Value::Num(*n),
-                Primitive::Str(s, _) => Value::Str(s.clone()),
+            Expr::Literal(_, value) => match value {
+                Primitive::None => Value::None,
+                Primitive::Bool(b) => Value::Bool(*b),
+                Primitive::Num(n) => Value::Num(*n),
+                Primitive::Str(s) => Value::Str(s.clone()),
             },
-            Expr::Unary(ref op, expr) => {
+            Expr::Unary(line, op, expr) => {
                 let value = self.eval(expr)?;
                 match op {
-                    UniOp::Neg(line) => {
+                    UniOp::Neg => {
                         if let Value::Num(n) = value {
                             Value::Num(-n)
                         } else {
                             return Err(RuntimeError::UniNonNumeric(*line));
                         }
                     }
-                    UniOp::Not(_) => Value::Bool(!value.is_truthy()),
+                    UniOp::Not => Value::Bool(!value.is_truthy()),
                 }
             }
-            Expr::Binary(ref lhs, ref op, ref rhs) => {
+            Expr::Binary(line, lhs, op, rhs) => {
                 let lval = self.eval(lhs)?;
                 let rval = self.eval(rhs)?;
                 match op {
-                    BinOp::Add(line) => match (lval, rval) {
+                    BinOp::Add => match (lval, rval) {
                         (Value::Num(lv), Value::Num(rv)) => Value::Num(lv + rv),
                         (Value::Str(lv), Value::Str(rv)) => Value::Str(lv + &rv),
                         _ => return Err(RuntimeError::BinAddUnsupportedType(*line)),
                     },
-                    BinOp::Sub(line) => match (lval, rval) {
+                    BinOp::Sub => match (lval, rval) {
                         (Value::Num(lv), Value::Num(rv)) => Value::Num(lv - rv),
                         _ => return Err(RuntimeError::BinNonNumeric(*line)),
                     },
-                    BinOp::Mul(line) => match (lval, rval) {
+                    BinOp::Mul => match (lval, rval) {
                         (Value::Num(lv), Value::Num(rv)) => Value::Num(lv * rv),
                         _ => return Err(RuntimeError::BinNonNumeric(*line)),
                     },
-                    BinOp::Div(line) => match (lval, rval) {
+                    BinOp::Div => match (lval, rval) {
                         (Value::Num(lv), Value::Num(rv)) => Value::Num(lv / rv),
                         _ => return Err(RuntimeError::BinNonNumeric(*line)),
                     },
-                    BinOp::Rem(line) => match (lval, rval) {
+                    BinOp::Rem => match (lval, rval) {
                         (Value::Num(lv), Value::Num(rv)) => Value::Num(lv % rv),
                         _ => return Err(RuntimeError::BinNonNumeric(*line)),
                     },
-                    BinOp::Lt(line) => match (lval, rval) {
+                    BinOp::Lt => match (lval, rval) {
                         (Value::Num(lv), Value::Num(rv)) => Value::Bool(lv < rv),
                         _ => return Err(RuntimeError::BinNonNumeric(*line)),
                     },
-                    BinOp::LtEq(line) => match (lval, rval) {
+                    BinOp::LtEq => match (lval, rval) {
                         (Value::Num(lv), Value::Num(rv)) => Value::Bool(lv <= rv),
                         _ => return Err(RuntimeError::BinNonNumeric(*line)),
                     },
-                    BinOp::Gt(line) => match (lval, rval) {
+                    BinOp::Gt => match (lval, rval) {
                         (Value::Num(lv), Value::Num(rv)) => Value::Bool(lv > rv),
                         _ => return Err(RuntimeError::BinNonNumeric(*line)),
                     },
-                    BinOp::GtEq(line) => match (lval, rval) {
+                    BinOp::GtEq => match (lval, rval) {
                         (Value::Num(lv), Value::Num(rv)) => Value::Bool(lv >= rv),
                         _ => return Err(RuntimeError::BinNonNumeric(*line)),
                     },
-                    BinOp::EqEq(_) => Value::Bool(lval == rval),
-                    BinOp::NotEq(_) => Value::Bool(lval != rval),
+                    BinOp::EqEq => Value::Bool(lval == rval),
+                    BinOp::NotEq => Value::Bool(lval != rval),
                 }
             }
-            Expr::Logical(lhs, op, rhs) => {
+            Expr::Logical(_, lhs, op, rhs) => {
                 let lval = self.eval(lhs)?;
                 match op {
-                    LogOp::And(_) => {
+                    LogOp::And => {
                         if lval.is_truthy() {
                             self.eval(rhs)?
                         } else {
                             lval
                         }
                     }
-                    LogOp::Or(_) => {
+                    LogOp::Or => {
                         if lval.is_truthy() {
                             lval
                         } else {
@@ -299,8 +293,8 @@ impl Interpreter {
                     }
                 }
             }
-            Expr::Call(expr, arguments, line) => {
-                let callee = self.eval(expr)?;
+            Expr::Call(line, callee, arguments) => {
+                let callee = self.eval(callee)?;
 
                 let mut args = Vec::new();
                 for arg in arguments {
@@ -341,7 +335,7 @@ impl Interpreter {
                     _ => return Err(RuntimeError::NotCallable(*line)),
                 }
             }
-            Expr::Get(object, name, line) => {
+            Expr::Get(line, object, name) => {
                 return match self.eval(object)? {
                     Value::Instance(obj) => obj
                         .get(&name)
@@ -349,9 +343,9 @@ impl Interpreter {
                     _ => Err(RuntimeError::NotInstance(*line)),
                 };
             }
-            Expr::Variable(var, line) => self.lookup_var(var, *line)?,
-            Expr::Self_(var, line) => self.lookup_var(var, *line)?,
-            Expr::Super(var, _, method, line) => {
+            Expr::Variable(var) => self.lookup_var(var)?,
+            Expr::Self_(var) => self.lookup_var(var)?,
+            Expr::Super(var, line, method) => {
                 let dist = self.hops.get(&var.id).cloned().unwrap();
                 let superclass = match self.env.get_at(dist, &var.name).unwrap() {
                     Value::Class(clz) => clz,
@@ -366,15 +360,15 @@ impl Interpreter {
                     .map(|fun| Value::Fun(fun.bind(instance)))
                     .ok_or_else(|| RuntimeError::UndefinedProp(*line, method.to_owned()));
             }
-            Expr::Group(ref inner) => self.eval(inner)?,
+            Expr::Group(inner) => self.eval(inner)?,
         })
     }
 
-    fn lookup_var(&mut self, var: &Var, line: usize) -> RunResult<Value> {
+    fn lookup_var(&mut self, var: &Var) -> RunResult<Value> {
         let value = match self.hops.get(&var.id) {
             Some(dist) => self.env.get_at(*dist, &var.name),
             None => self.globals.get(&var.name),
         };
-        value.ok_or_else(|| RuntimeError::UndefinedVar(line, var.name.clone()))
+        value.ok_or_else(|| RuntimeError::UndefinedVar(var.line, var.name.clone()))
     }
 }

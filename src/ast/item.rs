@@ -4,77 +4,98 @@ use std::rc::Rc;
 
 #[derive(Debug)]
 pub enum LogOp {
-    And(usize),
-    Or(usize),
+    And,
+    Or,
 }
 
 #[derive(Debug)]
 pub enum BinOp {
-    Add(usize),
-    Sub(usize),
-    Mul(usize),
-    Div(usize),
-    Rem(usize),
-    Lt(usize),
-    LtEq(usize),
-    Gt(usize),
-    GtEq(usize),
-    EqEq(usize),
-    NotEq(usize),
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
+    EqEq,
+    NotEq,
 }
 
 #[derive(Debug)]
 pub enum UniOp {
-    Neg(usize),
-    Not(usize),
+    Neg,
+    Not,
 }
 
 #[derive(Debug)]
 pub enum Primitive {
-    None(usize),
-    Bool(bool, usize),
-    Num(f64, usize),
-    Str(String, usize),
+    None,
+    Bool(bool),
+    Num(f64),
+    Str(String),
 }
 
 #[derive(Debug)]
 pub struct Var {
     pub id: usize,
     pub name: String,
+    pub line: usize,
 }
 
 impl Var {
-    pub fn new(id: usize, name: String) -> Self {
-        Self { id, name }
+    pub fn new(id: usize, name: String, line: usize) -> Self {
+        Self { id, name, line }
     }
 }
 
 /// Language items that evaluate to values.
 pub enum Expr {
-    Logical(Box<Expr>, LogOp, Box<Expr>),
-    Binary(Box<Expr>, BinOp, Box<Expr>),
-    Unary(UniOp, Box<Expr>),
-    Call(Box<Expr>, Vec<Expr>, usize),
-    Get(Box<Expr>, String, usize),
-    Literal(Primitive),
-    Variable(Var, usize),
-    Self_(Var, usize),
-    Super(Var, usize, String, usize),
+    /// (line, lhs, op, rhs)
+    Logical(usize, Box<Expr>, LogOp, Box<Expr>),
+    /// (line, lhs, op, rhs)
+    Binary(usize, Box<Expr>, BinOp, Box<Expr>),
+    /// (line, op, expr)
+    Unary(usize, UniOp, Box<Expr>),
+    /// (line, callee, args)
+    Call(usize, Box<Expr>, Vec<Expr>),
+    /// (line, obj, name)
+    Get(usize, Box<Expr>, String),
+    /// (line, value)
+    Literal(usize, Primitive),
+    /// (var)
+    Variable(Var),
+    /// (var)
+    Self_(Var),
+    /// (var, method_line, method_name)
+    Super(Var, usize, String),
+    /// (inner)
     Group(Box<Expr>),
 }
 
 /// Language items for control flow or side effects.
 pub enum Stmt {
-    For(Option<Box<Decl>>, Expr, Option<Box<Stmt>>, Vec<Decl>),
-    If(Vec<(Expr, Vec<Decl>)>, Option<Vec<Decl>>),
-    While(Expr, Vec<Decl>),
+    /// (init, condition, post, body)
+    For(Option<Box<Decl>>, Expr, Option<Box<Stmt>>, Body),
+    /// (branches, otherwise)
+    If(Vec<(Expr, Body)>, Option<Body>),
+    /// (condition, body)
+    While(Expr, Body),
+    /// (line)
     Break(usize),
+    /// (line)
     Continue(usize),
-    Return(Option<Expr>, usize),
-    Assignment(Var, Expr, usize),
-    Set(Expr, String, Expr, usize),
+    /// (line, value)
+    Return(usize, Option<Expr>),
+    /// (var, value)
+    Assignment(Var, Expr),
+    /// (line, object, name, value)
+    Set(usize, Expr, String, Expr),
+    /// (expr)
     Expression(Expr),
-    Block(Vec<Decl>),
+    /// (body)
+    Block(Body),
 }
 
 pub type Body = Vec<Decl>;
@@ -93,8 +114,12 @@ pub struct FunDecl {
 
 /// Language items that introduce name bindings.
 pub enum Decl {
-    Class(String, Option<Expr>, Vec<Rc<FunDecl>>, usize),
+    /// (line, name, superclass, methods)
+    Class(usize, String, Option<Var>, Vec<Rc<FunDecl>>),
+    /// (decl)
     Function(Rc<FunDecl>),
-    Let(String, Option<Expr>, usize),
+    /// (line, name, value)
+    Let(usize, String, Option<Expr>),
+    /// (stmt)
     Statement(Stmt),
 }
