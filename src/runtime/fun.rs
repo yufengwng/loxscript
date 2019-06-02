@@ -80,7 +80,7 @@ impl Function {
             env.define(param.name.to_owned(), arg);
         });
 
-        let sig = rt.exec_block(&self.decl.body, env)?;
+        let sig = rt.run_with(&self.decl.body, env)?;
         let result = if self.is_init {
             self.closure.get_at(0, "self").unwrap()
         } else {

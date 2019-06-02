@@ -2,13 +2,11 @@
 
 use std::rc::Rc;
 
-#[derive(Debug)]
 pub enum LogOp {
     And,
     Or,
 }
 
-#[derive(Debug)]
 pub enum BinOp {
     Add,
     Sub,
@@ -23,13 +21,11 @@ pub enum BinOp {
     NotEq,
 }
 
-#[derive(Debug)]
 pub enum UniOp {
     Neg,
     Not,
 }
 
-#[derive(Debug)]
 pub enum Primitive {
     None,
     Bool(bool),
@@ -37,7 +33,6 @@ pub enum Primitive {
     Str(String),
 }
 
-#[derive(Debug)]
 pub struct Var {
     pub id: usize,
     pub name: String,

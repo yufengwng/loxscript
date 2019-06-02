@@ -432,7 +432,7 @@ mod tests {
     fn error_when_unrecognized_character() {
         let src = "@";
         let report = Lexer::new(src).scan();
-        assert!(report.had_error);
+        assert!(report.errored);
         assert_eq!(1, report.spans.len());
         assert_eq!(EOF, report.spans[0].token);
     }
@@ -441,7 +441,7 @@ mod tests {
     fn error_when_unexpected_token() {
         let src = "!true";
         let report = Lexer::new(src).scan();
-        assert!(report.had_error);
+        assert!(report.errored);
         assert_eq!(2, report.spans.len());
         assert_eq!(True, report.spans[0].token);
         assert_eq!(EOF, report.spans[1].token);
@@ -451,7 +451,7 @@ mod tests {
     fn error_when_unterminated_string() {
         let src = "true \"a";
         let report = Lexer::new(src).scan();
-        assert!(report.had_error);
+        assert!(report.errored);
         assert_eq!(2, report.spans.len());
         assert_eq!(True, report.spans[0].token);
         assert_eq!(EOF, report.spans[1].token);
