@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::error;
 use std::fmt;
+use std::rc::Rc;
 
 use crate::ast::FunDecl;
-use crate::ast::{Decl, Expr, Stmt};
+use crate::ast::{Body, Decl, Expr, Stmt, Var};
 use crate::ResolvedProgram;
 
 #[derive(Debug)]
@@ -155,6 +156,67 @@ impl Resolver {
         }
     }
 
+    fn resolve_declare(&mut self, decl: &Decl) {
+        match decl {
+            Decl::Class(line, name, superclass_var, method_decls) => {
+                self.resolve_class(name, superclass_var, method_decls, *line);
+            }
+            Decl::Function(decl) => {
+                self.resolve_function(decl, FunType::Function);
+            }
+            Decl::Let(line, name, value) => {
+                self.declare(name, *line);
+                if let Some(expr) = value {
+                    self.resolve_expression(expr);
+                }
+                self.define(name);
+            }
+            Decl::Statement(stmt) => self.resolve_statement(stmt),
+        }
+    }
+
+    fn resolve_class(
+        &mut self,
+        name: &str,
+        superclass: &Option<Var>,
+        signatures: &[Rc<FunDecl>],
+        line: usize,
+    ) {
+        let prev = self.curr_class.clone();
+        self.curr_class = ClassType::Class;
+
+        self.declare(name, line);
+        self.define(name);
+
+        if let Some(var) = superclass {
+            if var.name == name {
+                self.log_err(ResolveError::InheritSelf(var.line, var.name.to_owned()));
+            }
+            self.curr_class = ClassType::Subclass;
+            self.save_hops(var.id, &var.name);
+            self.begin_scope();
+            self.define("super");
+        }
+
+        self.begin_scope();
+        self.define("self");
+
+        for method in signatures {
+            let kind = if method.name == "init" {
+                FunType::Init
+            } else {
+                FunType::Method
+            };
+            self.resolve_function(method, kind);
+        }
+
+        self.end_scope();
+        if superclass.is_some() {
+            self.end_scope();
+        }
+        self.curr_class = prev;
+    }
+
     fn resolve_function(&mut self, decl: &FunDecl, kind: FunType) {
         self.declare(&decl.name, decl.line);
         self.define(&decl.name);
@@ -173,85 +235,13 @@ impl Resolver {
         self.curr_fun = prev;
     }
 
-    fn resolve_block(&mut self, body: &[Decl]) {
-        self.begin_scope();
-        self.resolve_all(body);
-        self.end_scope();
-    }
-
-    fn resolve_declare(&mut self, decl: &Decl) {
-        match decl {
-            Decl::Class(line, name, superclass_var, method_decls) => {
-                let prev = self.curr_class.clone();
-                self.curr_class = ClassType::Class;
-
-                self.declare(name, *line);
-                self.define(name);
-
-                if let Some(var) = superclass_var {
-                    if var.name == *name {
-                        self.log_err(ResolveError::InheritSelf(var.line, var.name.to_owned()));
-                    }
-                    self.curr_class = ClassType::Subclass;
-                    self.save_hops(var.id, &var.name);
-                    self.begin_scope();
-                    self.define("super");
-                }
-
-                self.begin_scope();
-                self.define("self");
-
-                for method in method_decls {
-                    let kind = if method.name == "init" {
-                        FunType::Init
-                    } else {
-                        FunType::Method
-                    };
-                    self.resolve_function(method, kind);
-                }
-
-                self.end_scope();
-                if superclass_var.is_some() {
-                    self.end_scope();
-                }
-                self.curr_class = prev;
-            }
-            Decl::Function(decl) => {
-                self.resolve_function(decl, FunType::Function);
-            }
-            Decl::Let(line, name, init) => {
-                self.declare(name, *line);
-                if let Some(expr) = init {
-                    self.resolve_expression(expr);
-                }
-                self.define(name);
-            }
-            Decl::Statement(stmt) => self.resolve_statement(stmt),
-        }
-    }
-
     fn resolve_statement(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::For(init, cond, post, body) => {
-                self.begin_scope();
-                if let Some(decl) = init {
-                    self.resolve_declare(decl);
-                }
-                self.resolve_expression(cond);
-                if let Some(stmt) = post {
-                    self.resolve_statement(stmt);
-                }
-                self.resolve_block(body);
-                self.end_scope();
+                self.resolve_for_stmt(init, cond, post, body);
             }
             Stmt::If(branches, otherwise) => {
-                for (cond, body) in branches {
-                    self.resolve_expression(cond);
-                    self.resolve_block(body);
-                }
-                if let Some(body) = otherwise {
-                    self.resolve_block(body);
-                }
+                self.resolve_if_stmt(branches, otherwise);
             }
             Stmt::While(cond, body) => {
                 self.resolve_expression(cond);
@@ -259,19 +249,11 @@ impl Resolver {
             }
             Stmt::Break(_) => {}
             Stmt::Continue(_) => {}
-            Stmt::Return(line, expr) => {
-                if self.curr_fun == FunType::None {
-                    self.log_err(ResolveError::TopReturn(*line));
-                }
-                if let Some(e) = expr {
-                    if self.curr_fun == FunType::Init {
-                        self.log_err(ResolveError::InitReturn(*line));
-                    }
-                    self.resolve_expression(e);
-                }
+            Stmt::Return(line, value) => {
+                self.resolve_return_stmt(value, *line);
             }
-            Stmt::Assignment(var, expr) => {
-                self.resolve_expression(expr);
+            Stmt::Assignment(var, value) => {
+                self.resolve_expression(value);
                 self.save_hops(var.id, &var.name);
             }
             Stmt::Set(_, object, _, value) => {
@@ -279,7 +261,54 @@ impl Resolver {
                 self.resolve_expression(object);
             }
             Stmt::Expression(expr) => self.resolve_expression(expr),
-            Stmt::Block(decls) => self.resolve_block(decls),
+            Stmt::Block(body) => self.resolve_block(body),
+        }
+    }
+
+    fn resolve_block(&mut self, body: &[Decl]) {
+        self.begin_scope();
+        self.resolve_all(body);
+        self.end_scope();
+    }
+
+    fn resolve_for_stmt(
+        &mut self,
+        init: &Option<Box<Decl>>,
+        cond: &Expr,
+        post: &Option<Box<Stmt>>,
+        body: &[Decl],
+    ) {
+        self.begin_scope();
+        if let Some(decl) = init {
+            self.resolve_declare(decl);
+        }
+        self.resolve_expression(cond);
+        if let Some(stmt) = post {
+            self.resolve_statement(stmt);
+        }
+        self.resolve_block(body);
+        self.end_scope();
+    }
+
+    fn resolve_if_stmt(&mut self, branches: &[(Expr, Body)], otherwise: &Option<Body>) {
+        for (cond, then) in branches {
+            self.resolve_expression(cond);
+            self.resolve_block(then);
+        }
+        if let Some(body) = otherwise {
+            self.resolve_block(body);
+        }
+    }
+
+    fn resolve_return_stmt(&mut self, value: &Option<Expr>, line: usize) {
+        if self.curr_fun == FunType::None {
+            self.log_err(ResolveError::TopReturn(line));
+        }
+        if let Some(expr) = value {
+            if self.curr_fun == FunType::Init {
+                self.log_err(ResolveError::InitReturn(line));
+            }
+            self.resolve_expression(expr);
         }
     }
 
