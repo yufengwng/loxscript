@@ -303,13 +303,21 @@ impl Interpreter {
                 _ => return Err(RuntimeError::BinNonNumeric(line)),
             },
             BinOp::Div => match (lval, rval) {
-                // todo: divide by zero
-                (Value::Num(lv), Value::Num(rv)) => Value::Num(lv / rv),
+                (Value::Num(lv), Value::Num(rv)) => {
+                    if rv == 0.0 {
+                        return Err(RuntimeError::DivByZero(line));
+                    }
+                    Value::Num(lv / rv)
+                }
                 _ => return Err(RuntimeError::BinNonNumeric(line)),
             },
             BinOp::Rem => match (lval, rval) {
-                // todo: divide by zero
-                (Value::Num(lv), Value::Num(rv)) => Value::Num(lv % rv),
+                (Value::Num(lv), Value::Num(rv)) => {
+                    if rv == 0.0 {
+                        return Err(RuntimeError::DivByZero(line));
+                    }
+                    Value::Num(lv % rv)
+                }
                 _ => return Err(RuntimeError::BinNonNumeric(line)),
             },
             BinOp::Lt => match (lval, rval) {

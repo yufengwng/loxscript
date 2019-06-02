@@ -32,6 +32,8 @@ pub enum RuntimeError {
     /// (line)
     BinNonNumeric(usize),
     /// (line)
+    DivByZero(usize),
+    /// (line)
     NoFields(usize),
     /// (line)
     NotCallable(usize),
@@ -65,6 +67,9 @@ impl fmt::Display for RuntimeError {
             ),
             BinNonNumeric(line) => {
                 write!(f, "[line {}] runtime error: operands must be numbers", line)
+            }
+            DivByZero(line) => {
+                write!(f, "[line {}] runtime error: divide or modulo by zero", line)
             }
             NoFields(line) => write!(
                 f,
