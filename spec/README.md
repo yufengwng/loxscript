@@ -1,5 +1,8 @@
 Specification files are source code files written in loxscript and contain
 assertions that helps validate behavior of the interpreter implementation.
+Adapted from [craftinginterpreters][ci-tests].
+
+[ci-tests]: https://github.com/munificent/craftinginterpreters/tree/master/test
 
 \# symbols
 

@@ -5,38 +5,32 @@ use std::rc::Rc;
 use crate::runtime::Value;
 
 #[derive(Clone)]
-pub struct Env {
-    ptr: Rc<RefCell<Scope>>,
-}
+pub struct Env(Rc<RefCell<Scope>>);
 
 impl Env {
     pub fn new() -> Self {
-        Self {
-            ptr: Rc::new(RefCell::new(Scope::new())),
-        }
+        Self(Rc::new(RefCell::new(Scope::new())))
     }
 
     pub fn wrap(env: &Env) -> Self {
-        Self {
-            ptr: Rc::new(RefCell::new(Scope::wrap(&env.ptr))),
-        }
+        Self(Rc::new(RefCell::new(Scope::wrap(&env.0))))
     }
 
     pub fn unwrap(&self) -> Env {
-        match self.ptr.borrow().inner {
-            Some(ref rc) => Self { ptr: Rc::clone(rc) },
+        match self.0.borrow().inner {
+            Some(ref ptr) => Self(Rc::clone(ptr)),
             None => panic!("fatal error: cannot unwrap global root environment"),
         }
     }
 
     pub fn define(&mut self, name: String, value: Value) {
-        self.ptr.borrow_mut().set(name, value);
+        self.0.borrow_mut().set(name, value);
     }
 
     pub fn get(&self, name: &str) -> Option<Value> {
-        let mut curr = Some(Rc::clone(&self.ptr));
-        while let Some(rc) = curr {
-            let scope = rc.borrow();
+        let mut curr = Some(Rc::clone(&self.0));
+        while let Some(ptr) = curr {
+            let scope = ptr.borrow();
             if scope.has(name) {
                 return scope.get(name);
             }
@@ -46,9 +40,9 @@ impl Env {
     }
 
     pub fn assign(&mut self, name: String, value: Value) -> bool {
-        let mut curr = Some(Rc::clone(&self.ptr));
-        while let Some(rc) = curr {
-            let mut scope = rc.borrow_mut();
+        let mut curr = Some(Rc::clone(&self.0));
+        while let Some(ptr) = curr {
+            let mut scope = ptr.borrow_mut();
             if scope.has(&name) {
                 return scope.set(name, value).is_some();
             }
@@ -70,10 +64,10 @@ impl Env {
 
     fn find_at(&self, distance: usize) -> Option<Rc<RefCell<Scope>>> {
         let mut i = 0;
-        let mut curr = Some(Rc::clone(&self.ptr));
+        let mut curr = Some(Rc::clone(&self.0));
         while i < distance {
-            if let Some(rc) = curr {
-                curr = rc.borrow().next();
+            if let Some(ptr) = curr {
+                curr = ptr.borrow().next();
             } else {
                 break;
             }

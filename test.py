@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Yanked from https://github.com/munificent/craftinginterpreters/blob/master/util/test.py
+# Adapted from https://github.com/munificent/craftinginterpreters/blob/master/util/test.py
 
 from os import listdir
 from os.path import abspath, dirname, isdir, join, realpath, relpath, splitext
