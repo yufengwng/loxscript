@@ -11,7 +11,7 @@ pub enum Value {
     Num(f64),
     Str(String),
     Fun(LoxFunction),
-    Call(Rc<Call>),
+    Call(Rc<dyn Call>),
     Class(LoxClass),
     Instance(LoxInstance),
 }

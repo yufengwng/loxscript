@@ -96,8 +96,8 @@ impl Lexer {
                 }
             }
 
-            'a'...'z' | 'A'...'Z' | '_' => self.scan_identifier(),
-            '0'...'9' => return self.scan_number(),
+            'a'..='z' | 'A'..='Z' | '_' => self.scan_identifier(),
+            '0'..='9' => return self.scan_number(),
             '"' => return self.scan_string(),
 
             _ => {
