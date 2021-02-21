@@ -3,9 +3,9 @@ use std::error;
 use std::fmt;
 use std::rc::Rc;
 
-use crate::ast::FunDecl;
-use crate::ast::{Body, Decl, Expr, Stmt, Var};
-use crate::ResolvedProgram;
+use crate::tree::ast::FunDecl;
+use crate::tree::ast::{Body, Decl, Expr, Stmt, Var};
+use crate::tree::ResolvedProgram;
 
 #[derive(Debug)]
 enum ResolveError {

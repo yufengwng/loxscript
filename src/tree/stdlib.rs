@@ -1,10 +1,10 @@
 use std::fmt;
 use std::time::SystemTime;
 
-use crate::runtime::Call;
-use crate::runtime::RunResult;
-use crate::runtime::Value;
-use crate::Interpreter;
+use crate::tree::runtime::Call;
+use crate::tree::runtime::RunResult;
+use crate::tree::runtime::Value;
+use crate::tree::Interpreter;
 
 pub struct Print;
 

@@ -2,11 +2,11 @@ use std::error;
 use std::fmt;
 use std::rc::Rc;
 
-use crate::ast::{BinOp, LogOp, UniOp};
-use crate::ast::{Decl, Expr, Primitive, Stmt, Var};
-use crate::ast::{FunDecl, Param};
-use crate::ast::{Span, Token};
-use crate::ParsedProgram;
+use crate::tree::ast::{BinOp, LogOp, UniOp};
+use crate::tree::ast::{Decl, Expr, Primitive, Stmt, Var};
+use crate::tree::ast::{FunDecl, Param};
+use crate::tree::ast::{Span, Token};
+use crate::tree::ParsedProgram;
 
 const MAX_FN_ARITY: usize = 8;
 

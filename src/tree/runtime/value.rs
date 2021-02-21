@@ -1,8 +1,8 @@
 use std::fmt;
 use std::rc::Rc;
 
-use crate::runtime::{Call, LoxFunction};
-use crate::runtime::{LoxClass, LoxInstance};
+use crate::tree::runtime::{Call, LoxFunction};
+use crate::tree::runtime::{LoxClass, LoxInstance};
 
 #[derive(Clone)]
 pub enum Value {

@@ -1,14 +1,14 @@
 use std::fmt;
 use std::rc::Rc;
 
-use crate::ast::FunDecl;
-use crate::runtime::Call;
-use crate::runtime::Env;
-use crate::runtime::LoxInstance;
-use crate::runtime::RunResult;
-use crate::runtime::Signal;
-use crate::runtime::Value;
-use crate::Interpreter;
+use crate::tree::ast::FunDecl;
+use crate::tree::runtime::Call;
+use crate::tree::runtime::Env;
+use crate::tree::runtime::LoxInstance;
+use crate::tree::runtime::RunResult;
+use crate::tree::runtime::Signal;
+use crate::tree::runtime::Value;
+use crate::tree::Interpreter;
 
 #[derive(Clone)]
 pub struct LoxFunction(Rc<Function>);

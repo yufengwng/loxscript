@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
-use crate::runtime::{Call, LoxFunction, RunResult, Value};
-use crate::Interpreter;
+use crate::tree::runtime::{Call, LoxFunction, RunResult, Value};
+use crate::tree::Interpreter;
 
 #[derive(Clone)]
 pub struct LoxClass(Rc<Class>);

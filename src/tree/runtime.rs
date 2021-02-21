@@ -3,7 +3,7 @@
 use std::error;
 use std::fmt;
 
-use crate::interpreter::Interpreter;
+use crate::tree::interpreter::Interpreter;
 
 mod env;
 mod fun;

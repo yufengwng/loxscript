@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::ast::{BinOp, LogOp, UniOp};
-use crate::ast::{Body, Decl, Expr, FunDecl, Primitive, Stmt, Var};
-use crate::runtime::Env;
-use crate::runtime::Value;
-use crate::runtime::{Call, LoxClass, LoxFunction, Signal};
-use crate::runtime::{RunResult, RuntimeError};
-use crate::stdlib::{Clock, Print};
-use crate::ResolvedProgram;
+use crate::tree::ast::{BinOp, LogOp, UniOp};
+use crate::tree::ast::{Body, Decl, Expr, FunDecl, Primitive, Stmt, Var};
+use crate::tree::runtime::Env;
+use crate::tree::runtime::Value;
+use crate::tree::runtime::{Call, LoxClass, LoxFunction, Signal};
+use crate::tree::runtime::{RunResult, RuntimeError};
+use crate::tree::stdlib::{Clock, Print};
+use crate::tree::ResolvedProgram;
 
 pub struct Interpreter {
     env: Env,

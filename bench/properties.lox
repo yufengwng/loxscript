@@ -1,4 +1,4 @@
-# self benchmark stresses both field and method lookup.
+# This benchmark stresses both field and method lookup.
 
 class Foo {
   init() {

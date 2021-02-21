@@ -4,10 +4,10 @@ use std::io;
 use std::io::Write;
 use std::process;
 
-use loxscript::Interpreter;
-use loxscript::Lexer;
-use loxscript::Parser;
-use loxscript::Resolver;
+use loxscript::tree::Interpreter;
+use loxscript::tree::Lexer;
+use loxscript::tree::Parser;
+use loxscript::tree::Resolver;
 
 static NAME: &str = "loxscript";
 
@@ -17,14 +17,13 @@ const EX_DATAERR: i32 = 65;
 const EX_SOFTWARE: i32 = 70;
 
 fn main() {
-    let mut interpreter = Interpreter::new();
-
-    let args: Vec<String> = env::args().collect();
+    let args = env::args().collect::<Vec<String>>();
     if args.len() > 2 {
         eprintln!("Usage: {} [script]", NAME);
         process::exit(EX_USAGE);
     }
 
+    let mut interpreter = Interpreter::new();
     let status = if args.len() == 2 {
         run_file(&mut interpreter, &args[1])
     } else {
