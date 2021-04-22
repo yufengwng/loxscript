@@ -21,8 +21,11 @@ fn main() {
 
     let status = 0;
     let mut chunk = Chunk::new();
-    chunk.write(OpCode::Return as u8);
-    chunk.write(OpCode::Return as u8 + 3);
+    let idx = chunk.add_constant(1.2);
+    chunk.write(OpCode::Constant, 123);
+    chunk.write_byte(idx as u8, 123);
+    chunk.write(OpCode::Return, 123);
+    chunk.write_byte(OpCode::Return as u8 + 3, 123);
     debug::disassemble(&chunk, "test chunk");
 
     process::exit(status);
