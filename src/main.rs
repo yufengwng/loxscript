@@ -1,8 +1,9 @@
 use std::env;
 use std::process;
 
-use loxscript::chunk::Chunk;
-use loxscript::chunk::OpCode;
+use loxscript::bytecode::Chunk;
+use loxscript::bytecode::OpCode;
+use loxscript::debug;
 
 static NAME: &str = "loxscript";
 
@@ -22,7 +23,7 @@ fn main() {
     let mut chunk = Chunk::new();
     chunk.write(OpCode::Return as u8);
     chunk.write(OpCode::Return as u8 + 3);
-    chunk.disassemble("test chunk");
+    debug::disassemble(&chunk, "test chunk");
 
     process::exit(status);
 }
