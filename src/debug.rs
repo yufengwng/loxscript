@@ -30,7 +30,8 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
     };
 
     return match opcode {
-        Constant => constant_instruction("OP_CONSTANT", chunk, offset),
+        Constant => constant_instruction(opcode, chunk, offset),
+        ConstantLong => constant_instruction(opcode, chunk, offset),
         Return => simple_instruction("OP_RETURN", offset),
     };
 }
@@ -45,10 +46,19 @@ fn simple_instruction(name: &str, offset: usize) -> usize {
     return offset + 1;
 }
 
-fn constant_instruction(name: &str, chunk: &Chunk, offset: usize) -> usize {
-    let idx = chunk.code()[offset + 1] as usize;
-    print!("{:<16} {:4} '", name, idx);
-    value::print(&chunk.constants()[idx]);
+fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {
+    let code = chunk.code();
+    let (name, index, count) = if opcode == OpCode::Constant {
+        ("OP_CONSTANT", code[offset + 1] as usize, 2)
+    } else {
+        let byte1 = code[offset + 1] as usize;
+        let byte2 = code[offset + 2] as usize;
+        let byte3 = code[offset + 3] as usize;
+        let idx = (byte3 << 16) | (byte2 << 8) | byte1;
+        ("OP_CONSTANT_LONG", idx as usize, 4)
+    };
+    print!("{:<16} {:4} '", name, index);
+    value::print(&chunk.constants()[index]);
     println!("'");
-    return offset + 2;
+    return offset + count;
 }

@@ -21,9 +21,12 @@ fn main() {
 
     let status = 0;
     let mut chunk = Chunk::new();
-    let idx = chunk.add_constant(1.2);
-    chunk.write(OpCode::Constant, 123);
-    chunk.write_byte(idx as u8, 123);
+    let mut line = 0;
+    for i in 0..300 {
+        let index = chunk.add_constant(i as f64 + 0.2);
+        line += if index % 10 == 0 { 1 } else { 0 };
+        chunk.write_index(index, line);
+    }
     chunk.write(OpCode::Return, 123);
     chunk.write_byte(OpCode::Return as u8 + 3, 123);
     debug::disassemble(&chunk, "test chunk");
