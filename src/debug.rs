@@ -16,11 +16,10 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
     use OpCode::*;
     print!("{:04} ", offset);
 
-    let lines = chunk.lines();
-    if offset > 0 && lines[offset] == lines[offset - 1] {
+    if offset > 0 && chunk.line(offset) == chunk.line(offset - 1) {
         print!("   | ");
     } else {
-        print!("{:4} ", lines[offset]);
+        print!("{:4} ", chunk.line(offset));
     }
 
     let byte = chunk.code()[offset];

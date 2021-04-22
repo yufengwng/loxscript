@@ -26,7 +26,8 @@ impl TryFrom<u8> for OpCode {
 
 pub struct Chunk {
     code: Vec<u8>,
-    lines: Vec<usize>,
+    line_nums: Vec<usize>,
+    line_runs: Vec<usize>,
     constants: Vec<Value>,
 }
 
@@ -34,7 +35,8 @@ impl Chunk {
     pub fn new() -> Self {
         Self {
             code: Vec::new(),
-            lines: Vec::new(),
+            line_nums: Vec::new(),
+            line_runs: Vec::new(),
             constants: Vec::new(),
         }
     }
@@ -43,22 +45,40 @@ impl Chunk {
         &self.code[..]
     }
 
-    pub fn lines(&self) -> &[usize] {
-        &self.lines[..]
-    }
-
     pub fn constants(&self) -> &[Value] {
         &self.constants[..]
     }
 
+    pub fn line(&self, code_idx: usize) -> usize {
+        let target_run = code_idx + 1;
+        let mut current_runs = 0;
+        for i in 0..self.line_nums.len() {
+            current_runs += self.line_runs[i];
+            if target_run <= current_runs {
+                return self.line_nums[i];
+            }
+        }
+        panic!("cannot find line info for bytecode index {}", code_idx);
+    }
+
+    fn add_next_line(&mut self, line: usize) {
+        let len = self.line_nums.len();
+        if len == 0 || self.line_nums[len - 1] != line {
+            self.line_nums.push(line);
+            self.line_runs.push(1);
+        } else {
+            self.line_runs[len - 1] += 1;
+        }
+    }
+
     pub fn write(&mut self, opcode: OpCode, line: usize) {
         self.code.push(opcode as u8);
-        self.lines.push(line);
+        self.add_next_line(line);
     }
 
     pub fn write_byte(&mut self, byte: u8, line: usize) {
         self.code.push(byte);
-        self.lines.push(line);
+        self.add_next_line(line);
     }
 
     pub fn write_index(&mut self, index: usize, line: usize) {
@@ -125,5 +145,26 @@ mod tests {
         let index = chunk.add_constant(1.2);
         assert_eq!(1, chunk.constants().len());
         assert_eq!(0, index);
+    }
+
+    #[test]
+    fn chunk_line() {
+        let mut chunk = Chunk::new();
+        chunk.write(OpCode::Return, 123);
+        chunk.write(OpCode::Return, 123);
+        chunk.write(OpCode::Return, 123);
+        chunk.write(OpCode::Return, 456);
+        chunk.write(OpCode::Return, 789);
+        assert_eq!(123, chunk.line(0));
+        assert_eq!(123, chunk.line(1));
+        assert_eq!(123, chunk.line(2));
+        assert_eq!(456, chunk.line(3));
+        assert_eq!(789, chunk.line(4));
+    }
+
+    #[test]
+    #[should_panic]
+    fn chunk_line_out_of_range() {
+        Chunk::new().line(1000);
     }
 }
