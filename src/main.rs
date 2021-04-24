@@ -4,7 +4,8 @@ use std::process;
 use loxscript::bytecode::Chunk;
 use loxscript::bytecode::OpCode;
 use loxscript::debug;
-use loxscript::vm;
+use loxscript::runtime as rt;
+use loxscript::runtime::InterpretResult as Res;
 
 static NAME: &str = "loxscript";
 
@@ -32,8 +33,8 @@ fn main() {
     debug::disassemble(&chunk, "test chunk");
     println!();
 
-    use vm::InterpretResult as Res;
-    let status = match vm::interpret(chunk) {
+    let mut vm = rt::VM::new();
+    let status = match vm.interpret(chunk) {
         Res::Ok => EX_OK,
         Res::CompileErr => EX_DATAERR,
         Res::RuntimeErr => EX_SOFTWARE,
