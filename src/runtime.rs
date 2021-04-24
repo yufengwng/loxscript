@@ -40,14 +40,18 @@ impl VM {
                 }
             };
             match opcode {
-                Constant => {
-                    let val = frame.read_constant();
-                    self.stack.push(*val);
+                Constant => self.load_const(&mut frame),
+                ConstantLong => self.load_const_long(&mut frame),
+                Add => self.bin_add(),
+                Subtract => self.bin_subtract(),
+                Multiply => self.bin_multiply(),
+                Divide => if !self.bin_divide() {
+                    return InterpretResult::RuntimeErr;
                 }
-                ConstantLong => {
-                    let val = frame.read_constant_long();
-                    self.stack.push(*val);
+                Modulo => if !self.bin_modulo() {
+                    return InterpretResult::RuntimeErr;
                 }
+                Negate => self.negate(),
                 Return => {
                     let val = self.stack.pop().unwrap();
                     value::print(&val);
@@ -66,6 +70,63 @@ impl VM {
             print!(" ]");
         }
         println!();
+    }
+
+    fn load_const(&mut self, frame: &mut CallFrame) {
+        let val = frame.read_constant();
+        self.stack.push(*val);
+    }
+
+    fn load_const_long(&mut self, frame: &mut CallFrame) {
+        let val = frame.read_constant_long();
+        self.stack.push(*val);
+    }
+
+    fn bin_add(&mut self) {
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+        self.stack.push(lhs + rhs);
+    }
+
+    fn bin_subtract(&mut self) {
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+        self.stack.push(lhs - rhs);
+    }
+
+    fn bin_multiply(&mut self) {
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+        self.stack.push(lhs * rhs);
+    }
+
+    fn bin_divide(&mut self) -> bool {
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+        if rhs == 0.0 {
+            eprintln!("[lox] runtime error: divide-by-zero");
+            return false;
+        } else {
+            self.stack.push(lhs / rhs);
+            return true;
+        }
+    }
+
+    fn bin_modulo(&mut self) -> bool {
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+        if rhs == 0.0 {
+            eprintln!("[lox] runtime error: divide-by-zero");
+            return false;
+        } else {
+            self.stack.push(lhs % rhs);
+            return true;
+        }
+    }
+
+    fn negate(&mut self) {
+        let val = self.stack.pop().unwrap();
+        self.stack.push(-val);
     }
 }
 

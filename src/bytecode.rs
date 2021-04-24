@@ -7,6 +7,12 @@ use crate::value::Value;
 pub enum OpCode {
     Constant,
     ConstantLong,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Modulo,
+    Negate,
     Return,
 }
 
@@ -16,9 +22,15 @@ impl TryFrom<u8> for OpCode {
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         use OpCode::*;
         Ok(match value {
-            x if x == Constant as u8 => Constant,
-            x if x == ConstantLong as u8 => ConstantLong,
-            x if x == Return as u8 => Return,
+            b if b == Constant as u8 => Constant,
+            b if b == ConstantLong as u8 => ConstantLong,
+            b if b == Add as u8 => Add,
+            b if b == Subtract as u8 => Subtract,
+            b if b == Multiply as u8 => Multiply,
+            b if b == Divide as u8 => Divide,
+            b if b == Modulo as u8 => Modulo,
+            b if b == Negate as u8 => Negate,
+            b if b == Return as u8 => Return,
             _ => return Err(()),
         })
     }
@@ -95,7 +107,7 @@ impl Chunk {
         self.add_next_line(line);
     }
 
-    pub fn write_index(&mut self, index: usize, line: usize) {
+    pub fn write_load(&mut self, index: usize, line: usize) {
         if index <= u8::MAX as usize {
             self.write(OpCode::Constant, line);
             self.write_byte(index as u8, line);
@@ -129,19 +141,19 @@ mod tests {
     }
 
     #[test]
-    fn chunk_write_index() {
+    fn chunk_write_load() {
         let mut chunk = Chunk::new();
         assert_eq!(0, chunk.code_len());
-        chunk.write_index(u8::MAX as usize, 123);
+        chunk.write_load(u8::MAX as usize, 123);
         assert_eq!(2, chunk.code_len());
         assert_eq!(OpCode::Constant as u8, chunk.code(0));
     }
 
     #[test]
-    fn chunk_write_index_long() {
+    fn chunk_write_load_long() {
         let mut chunk = Chunk::new();
         assert_eq!(0, chunk.code_len());
-        chunk.write_index(u8::MAX as usize + 1, 123);
+        chunk.write_load(u8::MAX as usize + 1, 123);
         assert_eq!(4, chunk.code_len());
         assert_eq!(OpCode::ConstantLong as u8, chunk.code(0));
     }

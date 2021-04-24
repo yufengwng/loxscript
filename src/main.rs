@@ -26,10 +26,21 @@ fn main() {
     for i in 0..300 {
         let index = chunk.add_constant(i as f64 + 0.2);
         line += if index % 10 == 0 { 1 } else { 0 };
-        chunk.write_index(index, line);
+        chunk.write_load(index, line);
     }
-    chunk.write(OpCode::Return, 123);
     chunk.write_byte(OpCode::Return as u8 + 3, 123);
+
+    let const1 = chunk.add_constant(1.2);
+    let const2 = chunk.add_constant(3.4);
+    let const3 = chunk.add_constant(5.6);
+    chunk.write_load(const1, 123);
+    chunk.write_load(const2, 123);
+    chunk.write(OpCode::Add, 123);
+    chunk.write_load(const3, 123);
+    chunk.write(OpCode::Divide, 123);
+    chunk.write(OpCode::Negate, 123);
+    chunk.write(OpCode::Return, 123);
+
     debug::disassemble(&chunk, "test chunk");
     println!();
 

@@ -31,6 +31,12 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
     return match opcode {
         Constant => constant_instruction(opcode, chunk, offset),
         ConstantLong => constant_instruction(opcode, chunk, offset),
+        Add => simple_instruction("OP_ADD", offset),
+        Subtract => simple_instruction("OP_SUBTRACT", offset),
+        Multiply => simple_instruction("OP_MULTIPLY", offset),
+        Divide => simple_instruction("OP_DIVIDE", offset),
+        Modulo => simple_instruction("OP_MODULO", offset),
+        Negate => simple_instruction("OP_NEGATE", offset),
         Return => simple_instruction("OP_RETURN", offset),
     };
 }
