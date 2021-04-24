@@ -41,16 +41,30 @@ impl Chunk {
         }
     }
 
-    pub fn code(&self) -> &[u8] {
-        &self.code[..]
+    pub fn code_len(&self) -> usize {
+        self.code.len()
     }
 
-    pub fn constants(&self) -> &[Value] {
-        &self.constants[..]
+    pub fn code(&self, offset: usize) -> u8 {
+        self.code[offset]
     }
 
-    pub fn line(&self, code_idx: usize) -> usize {
-        let target_run = code_idx + 1;
+    pub fn constants_len(&self) -> usize {
+        self.constants.len()
+    }
+
+    pub fn constant(&self, index: usize) -> &Value {
+        &self.constants[index]
+    }
+
+    pub fn add_constant(&mut self, value: Value) -> usize {
+        let index = self.constants.len();
+        self.constants.push(value);
+        return index;
+    }
+
+    pub fn line(&self, offset: usize) -> usize {
+        let target_run = offset + 1;
         let mut current_runs = 0;
         for i in 0..self.line_nums.len() {
             current_runs += self.line_runs[i];
@@ -58,7 +72,7 @@ impl Chunk {
                 return self.line_nums[i];
             }
         }
-        panic!("cannot find line info for bytecode index {}", code_idx);
+        panic!("[lox] no line info for bytecode offset: {}", offset);
     }
 
     fn add_next_line(&mut self, line: usize) {
@@ -95,12 +109,6 @@ impl Chunk {
             self.write_byte(byte3, line);
         }
     }
-
-    pub fn add_constant(&mut self, value: Value) -> usize {
-        let index = self.constants.len();
-        self.constants.push(value);
-        return index;
-    }
 }
 
 #[cfg(test)]
@@ -123,27 +131,27 @@ mod tests {
     #[test]
     fn chunk_write_index() {
         let mut chunk = Chunk::new();
-        assert_eq!(0, chunk.code().len());
+        assert_eq!(0, chunk.code_len());
         chunk.write_index(u8::MAX as usize, 123);
-        assert_eq!(2, chunk.code().len());
-        assert_eq!(OpCode::Constant as u8, chunk.code()[0]);
+        assert_eq!(2, chunk.code_len());
+        assert_eq!(OpCode::Constant as u8, chunk.code(0));
     }
 
     #[test]
     fn chunk_write_index_long() {
         let mut chunk = Chunk::new();
-        assert_eq!(0, chunk.code().len());
+        assert_eq!(0, chunk.code_len());
         chunk.write_index(u8::MAX as usize + 1, 123);
-        assert_eq!(4, chunk.code().len());
-        assert_eq!(OpCode::ConstantLong as u8, chunk.code()[0]);
+        assert_eq!(4, chunk.code_len());
+        assert_eq!(OpCode::ConstantLong as u8, chunk.code(0));
     }
 
     #[test]
     fn chunk_add_constant() {
         let mut chunk = Chunk::new();
-        assert_eq!(0, chunk.constants().len());
+        assert_eq!(0, chunk.constants_len());
         let index = chunk.add_constant(1.2);
-        assert_eq!(1, chunk.constants().len());
+        assert_eq!(1, chunk.constants_len());
         assert_eq!(0, index);
     }
 

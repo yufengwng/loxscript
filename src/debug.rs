@@ -7,7 +7,7 @@ use crate::value;
 pub fn disassemble(chunk: &Chunk, name: &str) {
     println!("== {} ==", name);
     let mut offset = 0;
-    while offset < chunk.code().len() {
+    while offset < chunk.code_len() {
         offset = disassemble_at(chunk, offset);
     }
 }
@@ -22,10 +22,10 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
         print!("{:4} ", chunk.line(offset));
     }
 
-    let byte = chunk.code()[offset];
+    let byte = chunk.code(offset);
     let opcode = match OpCode::try_from(byte) {
-        Err(_) => return unknown_instruction(byte, offset),
         Ok(op) => op,
+        Err(_) => return unknown_instruction(byte, offset),
     };
 
     return match opcode {
@@ -46,18 +46,17 @@ fn simple_instruction(name: &str, offset: usize) -> usize {
 }
 
 fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {
-    let code = chunk.code();
     let (name, index, count) = if opcode == OpCode::Constant {
-        ("OP_CONSTANT", code[offset + 1] as usize, 2)
+        ("OP_CONSTANT", chunk.code(offset + 1) as usize, 2)
     } else {
-        let byte1 = code[offset + 1] as usize;
-        let byte2 = code[offset + 2] as usize;
-        let byte3 = code[offset + 3] as usize;
+        let byte1 = chunk.code(offset + 1) as usize;
+        let byte2 = chunk.code(offset + 2) as usize;
+        let byte3 = chunk.code(offset + 3) as usize;
         let idx = (byte3 << 16) | (byte2 << 8) | byte1;
         ("OP_CONSTANT_LONG", idx as usize, 4)
     };
     print!("{:<16} {:4} '", name, index);
-    value::print(&chunk.constants()[index]);
+    value::print(chunk.constant(index));
     println!("'");
     return offset + count;
 }

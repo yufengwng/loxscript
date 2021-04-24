@@ -4,13 +4,14 @@ use std::process;
 use loxscript::bytecode::Chunk;
 use loxscript::bytecode::OpCode;
 use loxscript::debug;
+use loxscript::vm;
 
 static NAME: &str = "loxscript";
 
-// const EX_OK: i32 = 0;
+const EX_OK: i32 = 0;
 const EX_USAGE: i32 = 64;
-// const EX_DATAERR: i32 = 65;
-// const EX_SOFTWARE: i32 = 70;
+const EX_DATAERR: i32 = 65;
+const EX_SOFTWARE: i32 = 70;
 
 fn main() {
     let args = env::args().collect::<Vec<String>>();
@@ -19,7 +20,6 @@ fn main() {
         process::exit(EX_USAGE);
     }
 
-    let status = 0;
     let mut chunk = Chunk::new();
     let mut line = 0;
     for i in 0..300 {
@@ -30,6 +30,14 @@ fn main() {
     chunk.write(OpCode::Return, 123);
     chunk.write_byte(OpCode::Return as u8 + 3, 123);
     debug::disassemble(&chunk, "test chunk");
+    println!();
+
+    use vm::InterpretResult as Res;
+    let status = match vm::interpret(chunk) {
+        Res::Ok => EX_OK,
+        Res::CompileErr => EX_DATAERR,
+        Res::RuntimeErr => EX_SOFTWARE,
+    };
 
     process::exit(status);
 }
