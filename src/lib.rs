@@ -1,5 +1,8 @@
-pub mod bytecode;
-pub mod debug;
 pub mod runtime;
 pub mod tree;
-pub mod value;
+
+mod bytecode;
+mod compile;
+mod debug;
+mod scan;
+mod value;

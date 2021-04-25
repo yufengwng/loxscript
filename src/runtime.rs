@@ -2,6 +2,7 @@ use std::convert::TryFrom;
 
 use crate::bytecode::Chunk;
 use crate::bytecode::OpCode;
+use crate::compile::Compiler;
 use crate::debug;
 use crate::value;
 use crate::value::Value;
@@ -21,8 +22,10 @@ impl VM {
         Self { stack: Vec::new() }
     }
 
-    pub fn interpret(&mut self, chunk: Chunk) -> InterpretResult {
-        self.run(chunk)
+    pub fn interpret(&mut self, source: &str) -> InterpretResult {
+        let mut compiler = Compiler::new();
+        compiler.compile(source);
+        return InterpretResult::Ok;
     }
 
     fn run(&mut self, chunk: Chunk) -> InterpretResult {
@@ -45,11 +48,15 @@ impl VM {
                 Add => self.bin_add(),
                 Subtract => self.bin_subtract(),
                 Multiply => self.bin_multiply(),
-                Divide => if !self.bin_divide() {
-                    return InterpretResult::RuntimeErr;
+                Divide => {
+                    if !self.bin_divide() {
+                        return InterpretResult::RuntimeErr;
+                    }
                 }
-                Modulo => if !self.bin_modulo() {
-                    return InterpretResult::RuntimeErr;
+                Modulo => {
+                    if !self.bin_modulo() {
+                        return InterpretResult::RuntimeErr;
+                    }
                 }
                 Negate => self.negate(),
                 Return => {
