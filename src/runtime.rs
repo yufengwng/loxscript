@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use crate::bytecode::Chunk;
 use crate::bytecode::OpCode;
-use crate::compile::Compiler;
+use crate::compile;
 use crate::debug;
 use crate::value;
 use crate::value::Value;
@@ -22,10 +22,11 @@ impl VM {
         Self { stack: Vec::new() }
     }
 
-    pub fn interpret(&mut self, source: &str) -> InterpretResult {
-        let mut compiler = Compiler::new();
-        compiler.compile(source);
-        return InterpretResult::Ok;
+    pub fn interpret(&mut self, source: String) -> InterpretResult {
+        match compile::compile(source) {
+            Some(chunk) => self.run(chunk),
+            None => InterpretResult::CompileErr,
+        }
     }
 
     fn run(&mut self, chunk: Chunk) -> InterpretResult {

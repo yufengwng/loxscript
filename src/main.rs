@@ -39,7 +39,7 @@ fn run_file(vm: &mut rt::VM, path: &str) -> i32 {
             return EX_SOFTWARE;
         }
     };
-    return match vm.interpret(&source) {
+    return match vm.interpret(source) {
         Res::Ok => EX_OK,
         Res::CompileErr => EX_DATAERR,
         Res::RuntimeErr => EX_SOFTWARE,
@@ -47,7 +47,6 @@ fn run_file(vm: &mut rt::VM, path: &str) -> i32 {
 }
 
 fn run_repl(vm: &mut rt::VM) -> i32 {
-    let mut line = String::new();
     loop {
         print!("> ");
         if let Err(e) = io::stdout().flush() {
@@ -55,7 +54,7 @@ fn run_repl(vm: &mut rt::VM) -> i32 {
             return EX_SOFTWARE;
         }
 
-        line.clear();
+        let mut line = String::new();
         match io::stdin().read_line(&mut line) {
             Ok(n) => {
                 if n == 0 {
@@ -73,7 +72,7 @@ fn run_repl(vm: &mut rt::VM) -> i32 {
             continue;
         }
 
-        match vm.interpret(&line) {
+        match vm.interpret(line) {
             Res::Ok => EX_OK,
             Res::CompileErr => EX_DATAERR,
             Res::RuntimeErr => EX_SOFTWARE,

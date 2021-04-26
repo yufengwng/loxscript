@@ -36,6 +36,8 @@ impl TryFrom<u8> for OpCode {
     }
 }
 
+pub const MAX_CONST_INDEX: usize = 0xFF_FF_FF;
+
 pub struct Chunk {
     code: Vec<u8>,
     line_nums: Vec<usize>,

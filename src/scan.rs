@@ -1,4 +1,5 @@
-#[derive(Debug, PartialEq, Eq)]
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Token {
     // Punctuation.
     Lparen,
@@ -54,22 +55,24 @@ pub enum Token {
     EOF,
 }
 
-pub struct Span<'a> {
+pub struct Span {
     pub token: Token,
-    pub slice: &'a str,
+    pub slice: String,
     pub line: usize,
 }
 
-pub struct Scanner<'a> {
-    src: &'a [u8],
+pub struct Scanner {
+    src: Vec<u8>,
+    head: usize,
     curr: usize,
     line: usize,
 }
 
-impl<'a> Scanner<'a> {
-    pub fn new(source: &'a str) -> Self {
+impl Scanner {
+    pub fn new(source: String) -> Self {
         Self {
-            src: source.as_bytes(),
+            src: source.into_bytes(),
+            head: 0,
             curr: 0,
             line: 1,
         }
@@ -119,8 +122,12 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    fn buf(&self) -> &[u8] {
+        &self.src[self.head..]
+    }
+
     fn is_at_end(&self) -> bool {
-        self.curr >= self.src.len()
+        self.head + self.curr >= self.src.len()
     }
 
     fn consume(&mut self) {
@@ -128,22 +135,24 @@ impl<'a> Scanner<'a> {
     }
 
     fn advance(&mut self) -> u8 {
-        let byte = self.src[self.curr];
+        let byte = self.buf()[self.curr];
         self.curr += 1;
         byte
     }
 
     fn peek(&self) -> u8 {
-        if self.curr < self.src.len() {
-            self.src[self.curr]
+        let buf = self.buf();
+        if self.curr < buf.len() {
+            buf[self.curr]
         } else {
             b'\0'
         }
     }
 
     fn peek_next(&self) -> u8 {
-        if self.curr + 1 < self.src.len() {
-            self.src[self.curr + 1]
+        let buf = self.buf();
+        if self.curr + 1 < buf.len() {
+            buf[self.curr + 1]
         } else {
             b'\0'
         }
@@ -153,7 +162,7 @@ impl<'a> Scanner<'a> {
         if self.is_at_end() {
             return false;
         }
-        if self.src[self.curr] != expected {
+        if self.buf()[self.curr] != expected {
             return false;
         }
         self.curr += 1;
@@ -184,25 +193,26 @@ impl<'a> Scanner<'a> {
     }
 
     fn slide_buffer(&mut self) -> &[u8] {
-        let bytes = &self.src[..self.curr];
-        self.src = &self.src[self.curr..];
+        let end = self.head + self.curr;
+        let bytes = &self.src[self.head..end];
+        self.head += self.curr;
         self.curr = 0;
         bytes
     }
 
-    fn error_span(&mut self, message: &'a str) -> Span {
+    fn error_span(&mut self, message: &str) -> Span {
         self.slide_buffer();
         Span {
             token: Token::Err,
-            slice: message,
+            slice: String::from(message),
             line: self.line,
         }
     }
 
     fn make_span(&mut self, token: Token) -> Span {
         let line = self.line;
-        let bytes = self.slide_buffer();
-        let slice = std::str::from_utf8(bytes).unwrap();
+        let bytes = self.slide_buffer().to_vec();
+        let slice = String::from_utf8(bytes).unwrap();
         Span { token, slice, line }
     }
 
@@ -246,12 +256,13 @@ impl<'a> Scanner<'a> {
     }
 
     fn check_keyword(&self) -> Token {
-        match self.src[0] {
+        let buf = self.buf();
+        match buf[0] {
             b'a' => return self.check_rest(1, b"nd", Token::And),
             b'b' => return self.check_rest(1, b"reak", Token::Break),
             b'c' => {
                 if self.curr > 1 {
-                    match self.src[1] {
+                    match buf[1] {
                         b'l' => return self.check_rest(2, b"ass", Token::Class),
                         b'o' => return self.check_rest(2, b"ntinue", Token::Continue),
                         _ => {}
@@ -259,8 +270,8 @@ impl<'a> Scanner<'a> {
                 }
             }
             b'e' => {
-                if self.curr > 2 && self.src[1] == b'l' {
-                    match self.src[2] {
+                if self.curr > 2 && buf[1] == b'l' {
+                    match buf[2] {
                         b'i' => return self.check_rest(3, b"f", Token::Elif),
                         b's' => return self.check_rest(3, b"e", Token::Else),
                         _ => {}
@@ -269,7 +280,7 @@ impl<'a> Scanner<'a> {
             }
             b'f' => {
                 if self.curr > 1 {
-                    match self.src[1] {
+                    match buf[1] {
                         b'a' => return self.check_rest(2, b"lse", Token::False),
                         b'o' => return self.check_rest(2, b"r", Token::For),
                         b'u' => return self.check_rest(2, b"n", Token::Fun),
@@ -280,8 +291,8 @@ impl<'a> Scanner<'a> {
             b'i' => return self.check_rest(1, b"f", Token::If),
             b'l' => return self.check_rest(1, b"et", Token::Let),
             b'n' => {
-                if self.curr > 2 && self.src[1] == b'o' {
-                    match self.src[2] {
+                if self.curr > 2 && buf[1] == b'o' {
+                    match buf[2] {
                         b'n' => return self.check_rest(3, b"e", Token::None),
                         b't' => return Token::Not,
                         _ => {}
@@ -292,7 +303,7 @@ impl<'a> Scanner<'a> {
             b'r' => return self.check_rest(1, b"eturn", Token::Return),
             b's' => {
                 if self.curr > 1 {
-                    match self.src[1] {
+                    match buf[1] {
                         b'e' => return self.check_rest(2, b"lf", Token::Self_),
                         b'u' => return self.check_rest(2, b"per", Token::Super),
                         _ => {}
@@ -308,7 +319,7 @@ impl<'a> Scanner<'a> {
 
     fn check_rest(&self, start: usize, rest: &[u8], token: Token) -> Token {
         if self.curr == start + rest.len() {
-            if &self.src[start..self.curr] == rest {
+            if &self.buf()[start..self.curr] == rest {
                 return token;
             }
         }
