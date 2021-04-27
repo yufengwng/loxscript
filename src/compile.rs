@@ -45,11 +45,11 @@ impl Compiler {
         }
     }
 
-    fn curr_span(&self) -> &Span {
+    fn curr(&self) -> &Span {
         self.curr.as_ref().unwrap()
     }
 
-    fn prev_span(&self) -> &Span {
+    fn prev(&self) -> &Span {
         self.prev.as_ref().unwrap()
     }
 
@@ -58,12 +58,7 @@ impl Compiler {
             return;
         }
 
-        let span = if at_curr {
-            self.curr_span()
-        } else {
-            self.prev_span()
-        };
-
+        let span = if at_curr { self.curr() } else { self.prev() };
         eprint!("[line {}] Error", span.line);
         if span.token == Token::EOF {
             eprint!(" at end");
@@ -88,7 +83,7 @@ impl Compiler {
         self.prev = self.curr.take();
         loop {
             self.curr = Some(self.scanner.scan());
-            let span = self.curr_span();
+            let span = self.curr();
             if span.token != Token::Err {
                 break;
             }
@@ -98,7 +93,7 @@ impl Compiler {
     }
 
     fn consume(&mut self, token: Token, message: &str) {
-        if self.curr_span().token == token {
+        if self.curr().token == token {
             self.advance();
             return;
         }
@@ -108,7 +103,7 @@ impl Compiler {
     fn parse_precedence(&mut self, prec: Prec) {
         self.advance();
 
-        let prefix_fn = self.rule_prefix(self.prev_span().token);
+        let prefix_fn = self.op_prefix(self.prev().token);
         if prefix_fn.is_none() {
             self.error("expect expression");
             return;
@@ -116,21 +111,21 @@ impl Compiler {
 
         prefix_fn.unwrap()(self);
 
-        while prec.power() <= self.rule_prec(self.curr_span().token).power() {
+        while prec.power() <= self.op_prec(self.curr().token).power() {
             self.advance();
-            let infix_fn = self.rule_infix(self.prev_span().token);
+            let infix_fn = self.op_infix(self.prev().token);
             infix_fn.unwrap()(self);
         }
     }
 
     fn expression(&mut self) {
-        self.parse_precedence(Prec::Assignment);
+        self.parse_precedence(Prec::Or);
     }
 
     fn binary(&mut self) {
-        let operator = self.prev_span().token;
+        let operator = self.prev().token;
 
-        let prec = self.rule_prec(operator);
+        let prec = self.op_prec(operator);
         self.parse_precedence(prec.stronger());
 
         match operator {
@@ -144,7 +139,7 @@ impl Compiler {
     }
 
     fn unary(&mut self) {
-        let operator = self.prev_span().token;
+        let operator = self.prev().token;
         self.parse_precedence(Prec::Unary);
         match operator {
             Token::Minus => self.emit(OpCode::Negate),
@@ -158,7 +153,7 @@ impl Compiler {
     }
 
     fn number(&mut self) {
-        let val = self.prev_span().slice.parse::<f64>().unwrap();
+        let val = self.prev().slice.parse::<f64>().unwrap();
         self.emit_constant(val);
     }
 
@@ -172,11 +167,11 @@ impl Compiler {
     }
 
     fn emit(&mut self, opcode: OpCode) {
-        self.chunk.write(opcode, self.prev_span().line);
+        self.chunk.write(opcode, self.prev().line);
     }
 
     fn emit_byte(&mut self, byte: u8) {
-        self.chunk.write_byte(byte, self.prev_span().line);
+        self.chunk.write_byte(byte, self.prev().line);
     }
 
     fn emit_pair(&mut self, byte1: u8, byte2: u8) {
@@ -186,7 +181,7 @@ impl Compiler {
 
     fn emit_constant(&mut self, val: Value) {
         let index = self.make_constant(val);
-        self.chunk.write_load(index, self.prev_span().line);
+        self.chunk.write_load(index, self.prev().line);
     }
 
     fn emit_return(&mut self) {
@@ -197,7 +192,7 @@ impl Compiler {
         self.emit_return();
     }
 
-    fn rule_prefix(&self, token: Token) -> Option<Box<ParseFn>> {
+    fn op_prefix(&self, token: Token) -> Option<Box<ParseFn>> {
         Some(Box::new(match token {
             Token::Lparen => Compiler::grouping,
             Token::Minus => Compiler::unary,
@@ -206,7 +201,7 @@ impl Compiler {
         }))
     }
 
-    fn rule_infix(&self, token: Token) -> Option<Box<ParseFn>> {
+    fn op_infix(&self, token: Token) -> Option<Box<ParseFn>> {
         Some(Box::new(match token {
             Token::Plus => Compiler::binary,
             Token::Minus => Compiler::binary,
@@ -217,7 +212,7 @@ impl Compiler {
         }))
     }
 
-    fn rule_prec(&self, token: Token) -> Prec {
+    fn op_prec(&self, token: Token) -> Prec {
         match token {
             Token::Plus => Prec::Term,
             Token::Minus => Prec::Term,
@@ -235,7 +230,6 @@ type ParseFn = dyn FnMut(&mut Compiler) -> ();
 #[derive(Copy, Clone)]
 enum Prec {
     None,
-    Assignment, // =
     Or,         // or
     And,        // and
     Equality,   // == !=
@@ -254,8 +248,7 @@ impl Prec {
 
     fn stronger(&self) -> Self {
         match self {
-            Prec::None => Prec::Assignment,
-            Prec::Assignment => Prec::Or,
+            Prec::None => Prec::Or,
             Prec::Or => Prec::And,
             Prec::And => Prec::Equality,
             Prec::Equality => Prec::Comparison,
