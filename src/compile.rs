@@ -108,26 +108,19 @@ impl Compiler {
     fn parse_precedence(&mut self, prec: Prec) {
         self.advance();
 
-        let rule = get_rule(self.prev_span().token);
-        if rule.prefix().is_none() {
+        let prefix_fn = self.rule_prefix(self.prev_span().token);
+        if prefix_fn.is_none() {
             self.error("expect expression");
             return;
         }
 
-        let mut prefix_fn = self.rule_fn(rule.prefix().unwrap());
-        prefix_fn(self);
+        prefix_fn.unwrap()(self);
 
-        while prec as u8 <= get_rule(self.curr_span().token).prec() as u8 {
+        while prec.power() <= self.rule_prec(self.curr_span().token).power() {
             self.advance();
-            let rule = get_rule(self.prev_span().token);
-            let mut infix_fn = self.rule_fn(rule.infix().unwrap());
-            infix_fn(self);
+            let infix_fn = self.rule_infix(self.prev_span().token);
+            infix_fn.unwrap()(self);
         }
-    }
-
-    fn grouping(&mut self) {
-        self.expression();
-        self.consume(Token::Rparen, "expect ')' after expression");
     }
 
     fn expression(&mut self) {
@@ -137,8 +130,8 @@ impl Compiler {
     fn binary(&mut self) {
         let operator = self.prev_span().token;
 
-        let rule = get_rule(operator);
-        self.parse_precedence(rule.prec().stronger());
+        let prec = self.rule_prec(operator);
+        self.parse_precedence(prec.stronger());
 
         match operator {
             Token::Plus => self.emit(OpCode::Add),
@@ -157,6 +150,11 @@ impl Compiler {
             Token::Minus => self.emit(OpCode::Negate),
             _ => panic!("[lox] should be unreachable in unary"),
         }
+    }
+
+    fn grouping(&mut self) {
+        self.expression();
+        self.consume(Token::Rparen, "expect ')' after expression");
     }
 
     fn number(&mut self) {
@@ -199,16 +197,39 @@ impl Compiler {
         self.emit_return();
     }
 
-    fn rule_fn(&mut self, id: usize) -> Box<dyn FnMut(&mut Compiler) -> ()> {
-        Box::new(match id {
-            0 => Compiler::grouping,
-            1 => Compiler::unary,
-            2 => Compiler::binary,
-            3 => Compiler::number,
-            _ => panic!("[lox] invalid rule fn id {}", id),
-        })
+    fn rule_prefix(&self, token: Token) -> Option<Box<ParseFn>> {
+        Some(Box::new(match token {
+            Token::Lparen => Compiler::grouping,
+            Token::Minus => Compiler::unary,
+            Token::Num => Compiler::number,
+            _ => return None,
+        }))
+    }
+
+    fn rule_infix(&self, token: Token) -> Option<Box<ParseFn>> {
+        Some(Box::new(match token {
+            Token::Plus => Compiler::binary,
+            Token::Minus => Compiler::binary,
+            Token::Star => Compiler::binary,
+            Token::Slash => Compiler::binary,
+            Token::Percent => Compiler::binary,
+            _ => return None,
+        }))
+    }
+
+    fn rule_prec(&self, token: Token) -> Prec {
+        match token {
+            Token::Plus => Prec::Term,
+            Token::Minus => Prec::Term,
+            Token::Star => Prec::Factor,
+            Token::Slash => Prec::Factor,
+            Token::Percent => Prec::Factor,
+            _ => Prec::None,
+        }
     }
 }
+
+type ParseFn = dyn FnMut(&mut Compiler) -> ();
 
 #[repr(u8)]
 #[derive(Copy, Clone)]
@@ -227,6 +248,10 @@ enum Prec {
 }
 
 impl Prec {
+    fn power(&self) -> u8 {
+        *self as u8
+    }
+
     fn stronger(&self) -> Self {
         match self {
             Prec::None => Prec::Assignment,
@@ -243,69 +268,3 @@ impl Prec {
         }
     }
 }
-
-struct Rule(Option<usize>, Option<usize>, Prec);
-
-impl Rule {
-    fn prefix(&self) -> &Option<usize> {
-        &self.0
-    }
-
-    fn infix(&self) -> &Option<usize> {
-        &self.1
-    }
-
-    fn prec(&self) -> Prec {
-        self.2
-    }
-}
-
-fn get_rule(token: Token) -> &'static Rule {
-    &RULES[token as usize]
-}
-
-static RULES: [Rule; 43] = [
-    /* Lparen   */ Rule(Some(0), None, Prec::None),
-    /* Rparen   */ Rule(None, None, Prec::None),
-    /* Lbrace   */ Rule(None, None, Prec::None),
-    /* Rbrace   */ Rule(None, None, Prec::None),
-    /* Comma    */ Rule(None, None, Prec::None),
-    /* Semi     */ Rule(None, None, Prec::None),
-    /* Dot      */ Rule(None, None, Prec::None),
-    /* Plus     */ Rule(None, Some(2), Prec::Term),
-    /* Minus    */ Rule(Some(1), Some(2), Prec::Term),
-    /* Star     */ Rule(None, Some(2), Prec::Factor),
-    /* Slash    */ Rule(None, Some(2), Prec::Factor),
-    /* Percent  */ Rule(None, Some(2), Prec::Factor),
-    /* Eq       */ Rule(None, None, Prec::None),
-    /* EqEq     */ Rule(None, None, Prec::None),
-    /* BangEq   */ Rule(None, None, Prec::None),
-    /* Lt       */ Rule(None, None, Prec::None),
-    /* LtEq     */ Rule(None, None, Prec::None),
-    /* Gt       */ Rule(None, None, Prec::None),
-    /* GtEq     */ Rule(None, None, Prec::None),
-    /* Not      */ Rule(None, None, Prec::None),
-    /* And      */ Rule(None, None, Prec::None),
-    /* Or       */ Rule(None, None, Prec::None),
-    /* If       */ Rule(None, None, Prec::None),
-    /* Elif     */ Rule(None, None, Prec::None),
-    /* Else     */ Rule(None, None, Prec::None),
-    /* For      */ Rule(None, None, Prec::None),
-    /* While    */ Rule(None, None, Prec::None),
-    /* Break    */ Rule(None, None, Prec::None),
-    /* Continue */ Rule(None, None, Prec::None),
-    /* Return   */ Rule(None, None, Prec::None),
-    /* Let      */ Rule(None, None, Prec::None),
-    /* Fun      */ Rule(None, None, Prec::None),
-    /* Class    */ Rule(None, None, Prec::None),
-    /* Super    */ Rule(None, None, Prec::None),
-    /* Self_    */ Rule(None, None, Prec::None),
-    /* None     */ Rule(None, None, Prec::None),
-    /* True     */ Rule(None, None, Prec::None),
-    /* False    */ Rule(None, None, Prec::None),
-    /* Ident    */ Rule(None, None, Prec::None),
-    /* Str      */ Rule(None, None, Prec::None),
-    /* Num      */ Rule(Some(3), None, Prec::None),
-    /* Err      */ Rule(None, None, Prec::None),
-    /* EOF      */ Rule(None, None, Prec::None),
-];
