@@ -2,7 +2,6 @@ use std::convert::TryFrom;
 
 use crate::bytecode::Chunk;
 use crate::bytecode::OpCode;
-use crate::value;
 
 pub fn disassemble(chunk: &Chunk, name: &str) {
     println!("== {} ==", name);
@@ -62,7 +61,7 @@ fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {
         ("OP_CONSTANT_LONG", idx as usize, 4)
     };
     print!("{:<16} {:4} '", name, index);
-    value::print(chunk.constant(index));
+    chunk.constant(index).print();
     println!("'");
     return offset + count;
 }

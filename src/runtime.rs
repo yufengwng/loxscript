@@ -4,8 +4,55 @@ use crate::bytecode::Chunk;
 use crate::bytecode::OpCode;
 use crate::compile;
 use crate::debug;
-use crate::value;
 use crate::value::Value;
+
+macro_rules! runtime_err {
+    ( $this:ident, $frame:ident, $($args:tt)+ ) => ({
+        println!($($args)*);
+        println!("[line {}] in script", $frame.curr_line());
+        $this.stack_reset();
+    });
+}
+
+macro_rules! bin_op {
+    ( $e:expr ) => ({
+        $e
+    });
+}
+
+macro_rules! bin_linear {
+    ( $this:ident, $frame:ident, $op:tt ) => ({
+        let top = $this.stack_peek(0);
+        let under = $this.stack_peek(1);
+        if let (Value::Num(lhs), Value::Num(rhs)) = (under, top) {
+            $this.stack_pop();
+            $this.stack_set(0, Value::Num(bin_op!(lhs $op rhs)));
+            true
+        } else {
+            runtime_err!($this, $frame, "operands must be numbers");
+            false
+        }
+    });
+}
+
+macro_rules! bin_inverse {
+    ( $this:ident, $frame:ident, $op:tt ) => ({
+        let top = $this.stack_peek(0);
+        let under = $this.stack_peek(1);
+        if let (Value::Num(lhs), Value::Num(rhs)) = (under, top) {
+            if rhs == 0.0 {
+                eprintln!("[lox] runtime error: divide-by-zero");
+                return false;
+            }
+            $this.stack_pop();
+            $this.stack_set(0, Value::Num(bin_op!(lhs $op rhs)));
+            true
+        } else {
+            runtime_err!($this, $frame, "operands must be numbers");
+            false
+        }
+    });
+}
 
 pub enum InterpretResult {
     Ok,
@@ -33,7 +80,7 @@ impl VM {
         use OpCode::*;
         let mut frame = CallFrame::new(chunk);
         loop {
-            self.trace_stack();
+            self.stack_print();
             debug::disassemble_at(&frame.chunk, frame.ip);
             let byte = frame.read_byte();
             let opcode = match OpCode::try_from(byte) {
@@ -46,23 +93,39 @@ impl VM {
             match opcode {
                 Constant => self.load_const(&mut frame),
                 ConstantLong => self.load_const_long(&mut frame),
-                Add => self.bin_add(),
-                Subtract => self.bin_subtract(),
-                Multiply => self.bin_multiply(),
+                Add => {
+                    if !self.bin_add(&frame) {
+                        return InterpretResult::RuntimeErr;
+                    }
+                }
+                Subtract => {
+                    if !self.bin_subtract(&frame) {
+                        return InterpretResult::RuntimeErr;
+                    }
+                }
+                Multiply => {
+                    if !self.bin_multiply(&frame) {
+                        return InterpretResult::RuntimeErr;
+                    }
+                }
                 Divide => {
-                    if !self.bin_divide() {
+                    if !self.bin_divide(&frame) {
                         return InterpretResult::RuntimeErr;
                     }
                 }
                 Modulo => {
-                    if !self.bin_modulo() {
+                    if !self.bin_modulo(&frame) {
                         return InterpretResult::RuntimeErr;
                     }
                 }
-                Negate => self.negate(),
+                Negate => {
+                    if !self.negate(&frame) {
+                        return InterpretResult::RuntimeErr;
+                    }
+                }
                 Return => {
-                    let val = self.stack.pop().unwrap();
-                    value::print(&val);
+                    let value = self.stack_pop();
+                    value.print();
                     println!();
                     return InterpretResult::Ok;
                 }
@@ -70,71 +133,75 @@ impl VM {
         }
     }
 
-    fn trace_stack(&self) {
+    fn stack_print(&self) {
         print!("        ");
-        for val in self.stack.iter() {
+        for value in self.stack.iter() {
             print!("[ ");
-            value::print(val);
+            value.print();
             print!(" ]");
         }
         println!();
     }
 
+    fn stack_peek(&mut self, distance: usize) -> Value {
+        self.stack[self.stack.len() - distance - 1]
+    }
+
+    fn stack_set(&mut self, distance: usize, value: Value) {
+        let len = self.stack.len();
+        self.stack[len - distance - 1] = value;
+    }
+
+    fn stack_push(&mut self, val: Value) {
+        self.stack.push(val);
+    }
+
+    fn stack_pop(&mut self) -> Value {
+        self.stack.pop().unwrap()
+    }
+
+    fn stack_reset(&mut self) {
+        self.stack.clear();
+    }
+
     fn load_const(&mut self, frame: &mut CallFrame) {
-        let val = frame.read_constant();
-        self.stack.push(*val);
+        let value = frame.read_constant();
+        self.stack_push(*value);
     }
 
     fn load_const_long(&mut self, frame: &mut CallFrame) {
-        let val = frame.read_constant_long();
-        self.stack.push(*val);
+        let value = frame.read_constant_long();
+        self.stack_push(*value);
     }
 
-    fn bin_add(&mut self) {
-        let rhs = self.stack.pop().unwrap();
-        let lhs = self.stack.pop().unwrap();
-        self.stack.push(lhs + rhs);
+    fn bin_add(&mut self, frame: &CallFrame) -> bool {
+        bin_linear!(self, frame, +)
     }
 
-    fn bin_subtract(&mut self) {
-        let rhs = self.stack.pop().unwrap();
-        let lhs = self.stack.pop().unwrap();
-        self.stack.push(lhs - rhs);
+    fn bin_subtract(&mut self, frame: &CallFrame) -> bool {
+        bin_linear!(self, frame, -)
     }
 
-    fn bin_multiply(&mut self) {
-        let rhs = self.stack.pop().unwrap();
-        let lhs = self.stack.pop().unwrap();
-        self.stack.push(lhs * rhs);
+    fn bin_multiply(&mut self, frame: &CallFrame) -> bool {
+        bin_linear!(self, frame, *)
     }
 
-    fn bin_divide(&mut self) -> bool {
-        let rhs = self.stack.pop().unwrap();
-        let lhs = self.stack.pop().unwrap();
-        if rhs == 0.0 {
-            eprintln!("[lox] runtime error: divide-by-zero");
-            return false;
+    fn bin_divide(&mut self, frame: &CallFrame) -> bool {
+        bin_inverse!(self, frame, /)
+    }
+
+    fn bin_modulo(&mut self, frame: &CallFrame) -> bool {
+        bin_inverse!(self, frame, %)
+    }
+
+    fn negate(&mut self, frame: &CallFrame) -> bool {
+        if let Value::Num(num) = self.stack_peek(0) {
+            self.stack_set(0, Value::Num(-num));
+            true
         } else {
-            self.stack.push(lhs / rhs);
-            return true;
+            runtime_err!(self, frame, "operand must be a number");
+            false
         }
-    }
-
-    fn bin_modulo(&mut self) -> bool {
-        let rhs = self.stack.pop().unwrap();
-        let lhs = self.stack.pop().unwrap();
-        if rhs == 0.0 {
-            eprintln!("[lox] runtime error: divide-by-zero");
-            return false;
-        } else {
-            self.stack.push(lhs % rhs);
-            return true;
-        }
-    }
-
-    fn negate(&mut self) {
-        let val = self.stack.pop().unwrap();
-        self.stack.push(-val);
     }
 }
 
@@ -146,6 +213,10 @@ struct CallFrame {
 impl CallFrame {
     fn new(chunk: Chunk) -> Self {
         Self { chunk, ip: 0 }
+    }
+
+    fn curr_line(&self) -> usize {
+        self.chunk.line(self.ip)
     }
 
     fn read_byte(&mut self) -> u8 {

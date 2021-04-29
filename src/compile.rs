@@ -154,7 +154,7 @@ impl Compiler {
 
     fn number(&mut self) {
         let val = self.prev().slice.parse::<f64>().unwrap();
-        self.emit_constant(val);
+        self.emit_constant(Value::Num(val));
     }
 
     fn make_constant(&mut self, val: Value) -> usize {

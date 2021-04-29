@@ -1,5 +1,16 @@
-pub type Value = f64;
+#[derive(Copy, Clone)]
+pub enum Value {
+    None,
+    Bool(bool),
+    Num(f64),
+}
 
-pub fn print(value: &Value) {
-    print!("{}", value);
+impl Value {
+    pub fn print(&self) {
+        match self {
+            Value::None => print!("none"),
+            Value::Bool(b) => print!("{}", b),
+            Value::Num(n) => print!("{}", n),
+        }
+    }
 }
