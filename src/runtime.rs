@@ -6,54 +6,6 @@ use crate::compile;
 use crate::debug;
 use crate::value::Value;
 
-macro_rules! runtime_err {
-    ( $this:ident, $frame:ident, $($args:tt)+ ) => ({
-        println!($($args)*);
-        println!("[line {}] in script", $frame.curr_line());
-        $this.stack_reset();
-    });
-}
-
-macro_rules! bin_op {
-    ( $e:expr ) => ({
-        $e
-    });
-}
-
-macro_rules! bin_linear {
-    ( $this:ident, $frame:ident, $op:tt ) => ({
-        let top = $this.stack_peek(0);
-        let under = $this.stack_peek(1);
-        if let (Value::Num(lhs), Value::Num(rhs)) = (under, top) {
-            $this.stack_pop();
-            $this.stack_set(0, Value::Num(bin_op!(lhs $op rhs)));
-            true
-        } else {
-            runtime_err!($this, $frame, "operands must be numbers");
-            false
-        }
-    });
-}
-
-macro_rules! bin_inverse {
-    ( $this:ident, $frame:ident, $op:tt ) => ({
-        let top = $this.stack_peek(0);
-        let under = $this.stack_peek(1);
-        if let (Value::Num(lhs), Value::Num(rhs)) = (under, top) {
-            if rhs == 0.0 {
-                eprintln!("[lox] runtime error: divide-by-zero");
-                return false;
-            }
-            $this.stack_pop();
-            $this.stack_set(0, Value::Num(bin_op!(lhs $op rhs)));
-            true
-        } else {
-            runtime_err!($this, $frame, "operands must be numbers");
-            false
-        }
-    });
-}
-
 pub enum InterpretResult {
     Ok,
     CompileErr,
@@ -79,6 +31,64 @@ impl VM {
     fn run(&mut self, chunk: Chunk) -> InterpretResult {
         use OpCode::*;
         let mut frame = CallFrame::new(chunk);
+
+        macro_rules! runtime_err {
+            ( $($args:tt)+ ) => ({
+                println!($($args)*);
+                println!("[line {}] in script", frame.curr_line());
+                self.stack_reset();
+            });
+        }
+
+        macro_rules! bin_op {
+            ( $e:expr ) => {{
+                $e
+            }};
+        }
+
+        macro_rules! bin_linear {
+            ( $op:tt ) => ({
+                let top = self.stack_peek(0);
+                let under = self.stack_peek(1);
+                if let (Value::Num(lhs), Value::Num(rhs)) = (under, top) {
+                    self.stack_pop();
+                    self.stack_set(0, Value::Num(bin_op!(lhs $op rhs)));
+                } else {
+                    runtime_err!("operands must be numbers");
+                    return InterpretResult::RuntimeErr;
+                }
+            });
+        }
+
+        macro_rules! bin_inverse {
+            ( $op:tt ) => ({
+                let top = self.stack_peek(0);
+                let under = self.stack_peek(1);
+                if let (Value::Num(lhs), Value::Num(rhs)) = (under, top) {
+                    if rhs == 0.0 {
+                        eprintln!("[lox] runtime error: divide-by-zero");
+                        return InterpretResult::RuntimeErr;
+                    }
+                    self.stack_pop();
+                    self.stack_set(0, Value::Num(bin_op!(lhs $op rhs)));
+                } else {
+                    runtime_err!("operands must be numbers");
+                    return InterpretResult::RuntimeErr;
+                }
+            });
+        }
+
+        macro_rules! unary_negate {
+            () => ({
+                if let Value::Num(num) = self.stack_peek(0) {
+                    self.stack_set(0, Value::Num(-num));
+                } else {
+                    runtime_err!("operand must be a number");
+                    return InterpretResult::RuntimeErr;
+                }
+            });
+        }
+
         loop {
             self.stack_print();
             debug::disassemble_at(&frame.chunk, frame.ip);
@@ -93,36 +103,12 @@ impl VM {
             match opcode {
                 Constant => self.load_const(&mut frame),
                 ConstantLong => self.load_const_long(&mut frame),
-                Add => {
-                    if !self.bin_add(&frame) {
-                        return InterpretResult::RuntimeErr;
-                    }
-                }
-                Subtract => {
-                    if !self.bin_subtract(&frame) {
-                        return InterpretResult::RuntimeErr;
-                    }
-                }
-                Multiply => {
-                    if !self.bin_multiply(&frame) {
-                        return InterpretResult::RuntimeErr;
-                    }
-                }
-                Divide => {
-                    if !self.bin_divide(&frame) {
-                        return InterpretResult::RuntimeErr;
-                    }
-                }
-                Modulo => {
-                    if !self.bin_modulo(&frame) {
-                        return InterpretResult::RuntimeErr;
-                    }
-                }
-                Negate => {
-                    if !self.negate(&frame) {
-                        return InterpretResult::RuntimeErr;
-                    }
-                }
+                Add => bin_linear!(+),
+                Subtract => bin_linear!(-),
+                Multiply => bin_linear!(*),
+                Divide => bin_inverse!(/),
+                Modulo => bin_inverse!(%),
+                Negate => unary_negate!(),
                 Return => {
                     let value = self.stack_pop();
                     value.print();
@@ -172,36 +158,6 @@ impl VM {
     fn load_const_long(&mut self, frame: &mut CallFrame) {
         let value = frame.read_constant_long();
         self.stack_push(*value);
-    }
-
-    fn bin_add(&mut self, frame: &CallFrame) -> bool {
-        bin_linear!(self, frame, +)
-    }
-
-    fn bin_subtract(&mut self, frame: &CallFrame) -> bool {
-        bin_linear!(self, frame, -)
-    }
-
-    fn bin_multiply(&mut self, frame: &CallFrame) -> bool {
-        bin_linear!(self, frame, *)
-    }
-
-    fn bin_divide(&mut self, frame: &CallFrame) -> bool {
-        bin_inverse!(self, frame, /)
-    }
-
-    fn bin_modulo(&mut self, frame: &CallFrame) -> bool {
-        bin_inverse!(self, frame, %)
-    }
-
-    fn negate(&mut self, frame: &CallFrame) -> bool {
-        if let Value::Num(num) = self.stack_peek(0) {
-            self.stack_set(0, Value::Num(-num));
-            true
-        } else {
-            runtime_err!(self, frame, "operand must be a number");
-            false
-        }
     }
 }
 
