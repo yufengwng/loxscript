@@ -152,6 +152,15 @@ impl Compiler {
         self.consume(Token::Rparen, "expect ')' after expression");
     }
 
+    fn literal(&mut self) {
+        match self.prev().token {
+            Token::None => self.emit(OpCode::None),
+            Token::True => self.emit(OpCode::True),
+            Token::False => self.emit(OpCode::False),
+            _ => panic!("[lox] should be unreachable in literal"),
+        }
+    }
+
     fn number(&mut self) {
         let val = self.prev().slice.parse::<f64>().unwrap();
         self.emit_constant(Value::Num(val));
@@ -196,6 +205,9 @@ impl Compiler {
         Some(Box::new(match token {
             Token::Lparen => Compiler::grouping,
             Token::Minus => Compiler::unary,
+            Token::None => Compiler::literal,
+            Token::True => Compiler::literal,
+            Token::False => Compiler::literal,
             Token::Num => Compiler::number,
             _ => return None,
         }))

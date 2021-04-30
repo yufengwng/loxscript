@@ -103,6 +103,9 @@ impl VM {
             match opcode {
                 Constant => self.load_const(&mut frame),
                 ConstantLong => self.load_const_long(&mut frame),
+                None => self.stack_push(Value::None),
+                True => self.stack_push(Value::Bool(true)),
+                False => self.stack_push(Value::Bool(false)),
                 Add => bin_linear!(+),
                 Subtract => bin_linear!(-),
                 Multiply => bin_linear!(*),

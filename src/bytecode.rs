@@ -7,6 +7,9 @@ use crate::value::Value;
 pub enum OpCode {
     Constant,
     ConstantLong,
+    None,
+    True,
+    False,
     Add,
     Subtract,
     Multiply,
@@ -24,6 +27,9 @@ impl TryFrom<u8> for OpCode {
         Ok(match value {
             b if b == Constant as u8 => Constant,
             b if b == ConstantLong as u8 => ConstantLong,
+            b if b == None as u8 => None,
+            b if b == True as u8 => True,
+            b if b == False as u8 => False,
             b if b == Add as u8 => Add,
             b if b == Subtract as u8 => Subtract,
             b if b == Multiply as u8 => Multiply,
