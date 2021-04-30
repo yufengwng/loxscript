@@ -39,6 +39,13 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
         Divide => simple_instruction("OP_DIVIDE", offset),
         Modulo => simple_instruction("OP_MODULO", offset),
         Negate => simple_instruction("OP_NEGATE", offset),
+        Not => simple_instruction("OP_NOT", offset),
+        Equal => simple_instruction("OP_EQUAL", offset),
+        NotEq => simple_instruction("OP_NOT_EQUAL", offset),
+        Lt => simple_instruction("OP_LESS", offset),
+        LtEq => simple_instruction("OP_LESS_EQUAL", offset),
+        Gt => simple_instruction("OP_GREATER", offset),
+        GtEq => simple_instruction("OP_GREATER_EQUAL", offset),
         Return => simple_instruction("OP_RETURN", offset),
     };
 }

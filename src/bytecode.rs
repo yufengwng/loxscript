@@ -16,6 +16,13 @@ pub enum OpCode {
     Divide,
     Modulo,
     Negate,
+    Not,
+    Equal,
+    NotEq,
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
     Return,
 }
 
@@ -36,6 +43,13 @@ impl TryFrom<u8> for OpCode {
             b if b == Divide as u8 => Divide,
             b if b == Modulo as u8 => Modulo,
             b if b == Negate as u8 => Negate,
+            b if b == Not as u8 => Not,
+            b if b == Equal as u8 => Equal,
+            b if b == NotEq as u8 => NotEq,
+            b if b == Lt as u8 => Lt,
+            b if b == LtEq as u8 => LtEq,
+            b if b == Gt as u8 => Gt,
+            b if b == GtEq as u8 => GtEq,
             b if b == Return as u8 => Return,
             _ => return Err(()),
         })

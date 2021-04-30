@@ -47,12 +47,12 @@ impl VM {
         }
 
         macro_rules! bin_linear {
-            ( $op:tt ) => ({
+            ( $ctor:expr, $op:tt ) => ({
                 let top = self.stack_peek(0);
                 let under = self.stack_peek(1);
                 if let (Value::Num(lhs), Value::Num(rhs)) = (under, top) {
                     self.stack_pop();
-                    self.stack_set(0, Value::Num(bin_op!(lhs $op rhs)));
+                    self.stack_set(0, $ctor(bin_op!(lhs $op rhs)));
                 } else {
                     runtime_err!("operands must be numbers");
                     return InterpretResult::RuntimeErr;
@@ -106,12 +106,30 @@ impl VM {
                 None => self.stack_push(Value::None),
                 True => self.stack_push(Value::Bool(true)),
                 False => self.stack_push(Value::Bool(false)),
-                Add => bin_linear!(+),
-                Subtract => bin_linear!(-),
-                Multiply => bin_linear!(*),
+                Add => bin_linear!(Value::Num, +),
+                Subtract => bin_linear!(Value::Num, -),
+                Multiply => bin_linear!(Value::Num, *),
                 Divide => bin_inverse!(/),
                 Modulo => bin_inverse!(%),
                 Negate => unary_negate!(),
+                Not => {
+                    let value = self.stack_pop().is_falsey();
+                    self.stack_push(Value::Bool(value));
+                }
+                Equal => {
+                    let rhs = self.stack_pop();
+                    let lhs = self.stack_pop();
+                    self.stack_push(Value::Bool(lhs.equal(&rhs)));
+                }
+                NotEq => {
+                    let rhs = self.stack_pop();
+                    let lhs = self.stack_pop();
+                    self.stack_push(Value::Bool(!lhs.equal(&rhs)));
+                }
+                Lt => bin_linear!(Value::Bool, <),
+                LtEq => bin_linear!(Value::Bool, <=),
+                Gt => bin_linear!(Value::Bool, >),
+                GtEq => bin_linear!(Value::Bool, >=),
                 Return => {
                     let value = self.stack_pop();
                     value.print();

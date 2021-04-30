@@ -134,6 +134,12 @@ impl Compiler {
             Token::Star => self.emit(OpCode::Multiply),
             Token::Slash => self.emit(OpCode::Divide),
             Token::Percent => self.emit(OpCode::Modulo),
+            Token::EqEq => self.emit(OpCode::Equal),
+            Token::BangEq => self.emit(OpCode::NotEq),
+            Token::Lt => self.emit(OpCode::Lt),
+            Token::LtEq => self.emit(OpCode::LtEq),
+            Token::Gt => self.emit(OpCode::Gt),
+            Token::GtEq => self.emit(OpCode::GtEq),
             _ => panic!("[lox] should be unreachable in binary"),
         }
     }
@@ -143,6 +149,7 @@ impl Compiler {
         self.parse_precedence(Prec::Unary);
         match operator {
             Token::Minus => self.emit(OpCode::Negate),
+            Token::Not => self.emit(OpCode::Not),
             _ => panic!("[lox] should be unreachable in unary"),
         }
     }
@@ -205,6 +212,7 @@ impl Compiler {
         Some(Box::new(match token {
             Token::Lparen => Compiler::grouping,
             Token::Minus => Compiler::unary,
+            Token::Not => Compiler::unary,
             Token::None => Compiler::literal,
             Token::True => Compiler::literal,
             Token::False => Compiler::literal,
@@ -220,6 +228,12 @@ impl Compiler {
             Token::Star => Compiler::binary,
             Token::Slash => Compiler::binary,
             Token::Percent => Compiler::binary,
+            Token::EqEq => Compiler::binary,
+            Token::BangEq => Compiler::binary,
+            Token::Lt => Compiler::binary,
+            Token::LtEq => Compiler::binary,
+            Token::Gt => Compiler::binary,
+            Token::GtEq => Compiler::binary,
             _ => return None,
         }))
     }
@@ -231,6 +245,12 @@ impl Compiler {
             Token::Star => Prec::Factor,
             Token::Slash => Prec::Factor,
             Token::Percent => Prec::Factor,
+            Token::EqEq => Prec::Equality,
+            Token::BangEq => Prec::Equality,
+            Token::Lt => Prec::Comparison,
+            Token::LtEq => Prec::Comparison,
+            Token::Gt => Prec::Comparison,
+            Token::GtEq => Prec::Comparison,
             _ => Prec::None,
         }
     }
