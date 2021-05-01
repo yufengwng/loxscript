@@ -1,4 +1,4 @@
-#[derive(Copy, Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Value {
     None,
     Bool(bool),
@@ -14,12 +14,14 @@ impl Value {
         }
     }
 
-    pub fn equal(&self, rhs: &Self) -> bool {
-        match (self, rhs) {
-            (Value::None, Value::None) => true,
-            (Value::Bool(b1), Value::Bool(b2)) => b1 == b2,
-            (Value::Num(n1), Value::Num(n2)) => n1 == n2,
-            _ => false,
+    pub fn is_num(&self) -> bool {
+        matches!(self, Self::Num(..))
+    }
+
+    pub fn into_num(self) -> f64 {
+        match self {
+            Self::Num(n) => n,
+            _ => panic!(),
         }
     }
 

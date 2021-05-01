@@ -32,6 +32,12 @@ impl VM {
         use OpCode::*;
         let mut frame = CallFrame::new(chunk);
 
+        macro_rules! expand {
+            ( $e:expr ) => ({
+                $e
+            });
+        }
+
         macro_rules! runtime_err {
             ( $($args:tt)+ ) => ({
                 println!($($args)*);
@@ -41,18 +47,13 @@ impl VM {
         }
 
         macro_rules! bin_op {
-            ( $e:expr ) => {{
-                $e
-            }};
-        }
-
-        macro_rules! bin_linear {
             ( $ctor:expr, $op:tt ) => ({
-                let top = self.stack_peek(0);
-                let under = self.stack_peek(1);
-                if let (Value::Num(lhs), Value::Num(rhs)) = (under, top) {
-                    self.stack_pop();
-                    self.stack_set(0, $ctor(bin_op!(lhs $op rhs)));
+                let rhs_is_num = self.stack_peek(0).is_num();
+                let lhs_is_num = self.stack_peek(1).is_num();
+                if lhs_is_num && rhs_is_num {
+                    let rhs = self.stack_pop().into_num();
+                    let lhs = self.stack_pop().into_num();
+                    self.stack_push($ctor(expand!(lhs $op rhs)));
                 } else {
                     runtime_err!("operands must be numbers");
                     return InterpretResult::RuntimeErr;
@@ -60,17 +61,18 @@ impl VM {
             });
         }
 
-        macro_rules! bin_inverse {
+        macro_rules! bin_op_checked {
             ( $op:tt ) => ({
-                let top = self.stack_peek(0);
-                let under = self.stack_peek(1);
-                if let (Value::Num(lhs), Value::Num(rhs)) = (under, top) {
+                let rhs_is_num = self.stack_peek(0).is_num();
+                let lhs_is_num = self.stack_peek(1).is_num();
+                if lhs_is_num && rhs_is_num {
+                    let rhs = self.stack_pop().into_num();
+                    let lhs = self.stack_pop().into_num();
                     if rhs == 0.0 {
                         eprintln!("[lox] runtime error: divide-by-zero");
                         return InterpretResult::RuntimeErr;
                     }
-                    self.stack_pop();
-                    self.stack_set(0, Value::Num(bin_op!(lhs $op rhs)));
+                    self.stack_push(Value::Num(expand!(lhs $op rhs)));
                 } else {
                     runtime_err!("operands must be numbers");
                     return InterpretResult::RuntimeErr;
@@ -80,12 +82,28 @@ impl VM {
 
         macro_rules! unary_negate {
             () => ({
-                if let Value::Num(num) = self.stack_peek(0) {
-                    self.stack_set(0, Value::Num(-num));
+                if self.stack_peek(0).is_num() {
+                    let num = self.stack_pop().into_num();
+                    self.stack_push(Value::Num(-num));
                 } else {
                     runtime_err!("operand must be a number");
                     return InterpretResult::RuntimeErr;
                 }
+            });
+        }
+
+        macro_rules! unary_not {
+            () => ({
+                let value = self.stack_pop().is_falsey();
+                self.stack_push(Value::Bool(value));
+            });
+        }
+
+        macro_rules! equality {
+            ( $op:tt ) => ({
+                let rhs = self.stack_pop();
+                let lhs = self.stack_pop();
+                self.stack_push(Value::Bool(expand!(lhs $op rhs)));
             });
         }
 
@@ -106,30 +124,19 @@ impl VM {
                 None => self.stack_push(Value::None),
                 True => self.stack_push(Value::Bool(true)),
                 False => self.stack_push(Value::Bool(false)),
-                Add => bin_linear!(Value::Num, +),
-                Subtract => bin_linear!(Value::Num, -),
-                Multiply => bin_linear!(Value::Num, *),
-                Divide => bin_inverse!(/),
-                Modulo => bin_inverse!(%),
+                Add => bin_op!(Value::Num, +),
+                Subtract => bin_op!(Value::Num, -),
+                Multiply => bin_op!(Value::Num, *),
+                Divide => bin_op_checked!(/),
+                Modulo => bin_op_checked!(%),
                 Negate => unary_negate!(),
-                Not => {
-                    let value = self.stack_pop().is_falsey();
-                    self.stack_push(Value::Bool(value));
-                }
-                Equal => {
-                    let rhs = self.stack_pop();
-                    let lhs = self.stack_pop();
-                    self.stack_push(Value::Bool(lhs.equal(&rhs)));
-                }
-                NotEq => {
-                    let rhs = self.stack_pop();
-                    let lhs = self.stack_pop();
-                    self.stack_push(Value::Bool(!lhs.equal(&rhs)));
-                }
-                Lt => bin_linear!(Value::Bool, <),
-                LtEq => bin_linear!(Value::Bool, <=),
-                Gt => bin_linear!(Value::Bool, >),
-                GtEq => bin_linear!(Value::Bool, >=),
+                Not => unary_not!(),
+                Equal => equality!(==),
+                NotEq => equality!(!=),
+                Lt => bin_op!(Value::Bool, <),
+                LtEq => bin_op!(Value::Bool, <=),
+                Gt => bin_op!(Value::Bool, >),
+                GtEq => bin_op!(Value::Bool, >=),
                 Return => {
                     let value = self.stack_pop();
                     value.print();
@@ -150,17 +157,12 @@ impl VM {
         println!();
     }
 
-    fn stack_peek(&mut self, distance: usize) -> Value {
-        self.stack[self.stack.len() - distance - 1]
+    fn stack_peek(&mut self, distance: usize) -> &Value {
+        &self.stack[self.stack.len() - distance - 1]
     }
 
-    fn stack_set(&mut self, distance: usize, value: Value) {
-        let len = self.stack.len();
-        self.stack[len - distance - 1] = value;
-    }
-
-    fn stack_push(&mut self, val: Value) {
-        self.stack.push(val);
+    fn stack_push(&mut self, value: Value) {
+        self.stack.push(value);
     }
 
     fn stack_pop(&mut self) -> Value {
@@ -173,12 +175,12 @@ impl VM {
 
     fn load_const(&mut self, frame: &mut CallFrame) {
         let value = frame.read_constant();
-        self.stack_push(*value);
+        self.stack_push(value.clone());
     }
 
     fn load_const_long(&mut self, frame: &mut CallFrame) {
         let value = frame.read_constant_long();
-        self.stack_push(*value);
+        self.stack_push(value.clone());
     }
 }
 

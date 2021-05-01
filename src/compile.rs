@@ -140,7 +140,7 @@ impl Compiler {
             Token::LtEq => self.emit(OpCode::LtEq),
             Token::Gt => self.emit(OpCode::Gt),
             Token::GtEq => self.emit(OpCode::GtEq),
-            _ => panic!("[lox] should be unreachable in binary"),
+            _ => unreachable!(),
         }
     }
 
@@ -150,7 +150,7 @@ impl Compiler {
         match operator {
             Token::Minus => self.emit(OpCode::Negate),
             Token::Not => self.emit(OpCode::Not),
-            _ => panic!("[lox] should be unreachable in unary"),
+            _ => unreachable!(),
         }
     }
 
@@ -164,17 +164,17 @@ impl Compiler {
             Token::None => self.emit(OpCode::None),
             Token::True => self.emit(OpCode::True),
             Token::False => self.emit(OpCode::False),
-            _ => panic!("[lox] should be unreachable in literal"),
+            _ => unreachable!(),
         }
     }
 
     fn number(&mut self) {
-        let val = self.prev().slice.parse::<f64>().unwrap();
-        self.emit_constant(Value::Num(val));
+        let value: f64 = self.prev().slice.parse().unwrap();
+        self.emit_constant(Value::Num(value));
     }
 
-    fn make_constant(&mut self, val: Value) -> usize {
-        let index = self.chunk.add_constant(val);
+    fn make_constant(&mut self, value: Value) -> usize {
+        let index = self.chunk.add_constant(value);
         if index > MAX_CONST_INDEX {
             self.error("too many constants in one chunk");
             return 0;
@@ -195,8 +195,8 @@ impl Compiler {
         self.emit_byte(byte2);
     }
 
-    fn emit_constant(&mut self, val: Value) {
-        let index = self.make_constant(val);
+    fn emit_constant(&mut self, value: Value) {
+        let index = self.make_constant(value);
         self.chunk.write_load(index, self.prev().line);
     }
 

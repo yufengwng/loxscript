@@ -83,10 +83,6 @@ impl Chunk {
         self.code[offset]
     }
 
-    pub fn constants_len(&self) -> usize {
-        self.constants.len()
-    }
-
     pub fn constant(&self, index: usize) -> &Value {
         &self.constants[index]
     }
