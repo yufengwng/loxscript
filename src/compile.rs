@@ -168,6 +168,13 @@ impl Compiler {
         }
     }
 
+    fn string(&mut self) {
+        let lexeme = &self.prev().slice;
+        let end = lexeme.len() - 1;
+        let copy = lexeme[1..end].to_owned();
+        self.emit_constant(Value::Str(copy));
+    }
+
     fn number(&mut self) {
         let value: f64 = self.prev().slice.parse().unwrap();
         self.emit_constant(Value::Num(value));
@@ -216,6 +223,7 @@ impl Compiler {
             Token::None => Compiler::literal,
             Token::True => Compiler::literal,
             Token::False => Compiler::literal,
+            Token::Str => Compiler::string,
             Token::Num => Compiler::number,
             _ => return None,
         }))

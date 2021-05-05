@@ -3,6 +3,7 @@ pub enum Value {
     None,
     Bool(bool),
     Num(f64),
+    Str(String),
 }
 
 impl Value {
@@ -18,9 +19,20 @@ impl Value {
         matches!(self, Self::Num(..))
     }
 
+    pub fn is_str(&self) -> bool {
+        matches!(self, Self::Str(..))
+    }
+
     pub fn into_num(self) -> f64 {
         match self {
             Self::Num(n) => n,
+            _ => panic!(),
+        }
+    }
+
+    pub fn into_str(self) -> String {
+        match self {
+            Self::Str(s) => s,
             _ => panic!(),
         }
     }
@@ -30,6 +42,7 @@ impl Value {
             Value::None => print!("none"),
             Value::Bool(b) => print!("{}", b),
             Value::Num(n) => print!("{}", n),
+            Value::Str(s) => print!("{}", s),
         }
     }
 }

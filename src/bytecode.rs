@@ -179,9 +179,9 @@ mod tests {
     #[test]
     fn chunk_add_constant() {
         let mut chunk = Chunk::new();
-        assert_eq!(0, chunk.constants_len());
+        assert_eq!(0, chunk.constants.len());
         let index = chunk.add_constant(Value::Num(1.2));
-        assert_eq!(1, chunk.constants_len());
+        assert_eq!(1, chunk.constants.len());
         assert_eq!(0, index);
     }
 

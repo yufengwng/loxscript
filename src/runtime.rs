@@ -46,6 +46,28 @@ impl VM {
             });
         }
 
+        macro_rules! bin_add {
+            () => ({
+                let rhs_is_str = self.stack_peek(0).is_str();
+                let lhs_is_str = self.stack_peek(1).is_str();
+                let rhs_is_num = self.stack_peek(0).is_num();
+                let lhs_is_num = self.stack_peek(1).is_num();
+                if lhs_is_str && rhs_is_str {
+                    let rhs = self.stack_pop().into_str();
+                    let mut lhs = self.stack_pop().into_str();
+                    lhs.push_str(&rhs);
+                    self.stack_push(Value::Str(lhs));
+                } else if lhs_is_num && rhs_is_num {
+                    let rhs = self.stack_pop().into_num();
+                    let lhs = self.stack_pop().into_num();
+                    self.stack_push(Value::Num(lhs + rhs));
+                } else {
+                    runtime_err!("operands must be two numbers or two strings");
+                    return InterpretResult::RuntimeErr;
+                }
+            });
+        }
+
         macro_rules! bin_op {
             ( $ctor:expr, $op:tt ) => ({
                 let rhs_is_num = self.stack_peek(0).is_num();
@@ -124,7 +146,7 @@ impl VM {
                 None => self.stack_push(Value::None),
                 True => self.stack_push(Value::Bool(true)),
                 False => self.stack_push(Value::Bool(false)),
-                Add => bin_op!(Value::Num, +),
+                Add => bin_add!(),
                 Subtract => bin_op!(Value::Num, -),
                 Multiply => bin_op!(Value::Num, *),
                 Divide => bin_op_checked!(/),
