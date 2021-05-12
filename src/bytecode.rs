@@ -7,6 +7,9 @@ use crate::value::Value;
 pub enum OpCode {
     Constant,
     ConstantLong,
+    DefineGlobal,
+    GetGlobal,
+    SetGlobal,
     None,
     True,
     False,
@@ -23,6 +26,7 @@ pub enum OpCode {
     LtEq,
     Gt,
     GtEq,
+    Pop,
     Return,
 }
 
@@ -34,6 +38,9 @@ impl TryFrom<u8> for OpCode {
         Ok(match value {
             b if b == Constant as u8 => Constant,
             b if b == ConstantLong as u8 => ConstantLong,
+            b if b == DefineGlobal as u8 => DefineGlobal,
+            b if b == GetGlobal as u8 => GetGlobal,
+            b if b == SetGlobal as u8 => SetGlobal,
             b if b == None as u8 => None,
             b if b == True as u8 => True,
             b if b == False as u8 => False,
@@ -50,6 +57,7 @@ impl TryFrom<u8> for OpCode {
             b if b == LtEq as u8 => LtEq,
             b if b == Gt as u8 => Gt,
             b if b == GtEq as u8 => GtEq,
+            b if b == Pop as u8 => Pop,
             b if b == Return as u8 => Return,
             _ => return Err(()),
         })

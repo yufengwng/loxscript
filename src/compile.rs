@@ -34,8 +34,9 @@ impl Compiler {
 
     pub fn compile(mut self) -> Option<Chunk> {
         self.advance();
-        self.expression();
-        self.consume(Token::EOF, "expected end of expression");
+        while !self.matches(Token::EOF) {
+            self.declaration();
+        }
         self.end();
         if !self.had_error {
             debug::disassemble(&self.chunk, "code");
@@ -100,6 +101,80 @@ impl Compiler {
         self.error_curr(message);
     }
 
+    fn matches(&mut self, token: Token) -> bool {
+        if self.check(token) {
+            self.advance();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn check(&self, token: Token) -> bool {
+        self.curr().token == token
+    }
+
+    fn synchronize(&mut self) {
+        self.panic_mode = false;
+        while self.curr().token != Token::EOF {
+            if self.prev().token == Token::Semi {
+                return;
+            }
+            match self.curr().token {
+                Token::Class
+                | Token::Fun
+                | Token::Let
+                | Token::If
+                | Token::For
+                | Token::While
+                | Token::Break
+                | Token::Continue
+                | Token::Return => return,
+                _ => {}
+            }
+            self.advance();
+        }
+    }
+
+    fn declaration(&mut self) {
+        if self.matches(Token::Let) {
+            self.decl_let();
+        } else {
+            self.statement();
+        }
+
+        if self.panic_mode {
+            self.synchronize();
+        }
+    }
+
+    fn decl_let(&mut self) {
+        let global_idx = self.parse_variable("expect variable name");
+        if self.matches(Token::Eq) {
+            self.expression();
+        } else {
+            self.emit(OpCode::None);
+        }
+        self.consume(Token::Semi, "expect ';' after variable declaration");
+        self.define_variable(global_idx);
+    }
+
+    fn statement(&mut self) {
+        self.stmt_expression();
+    }
+
+    fn stmt_expression(&mut self) {
+        self.expression();
+        self.consume(Token::Semi, "expect ';' after expression");
+        self.emit(OpCode::Pop);
+    }
+
+    fn parse_variable(&mut self, message: &str) -> usize {
+        self.consume(Token::Ident, message);
+        let name = self.prev().slice.to_owned();
+        self.make_ident_constant(name)
+    }
+
     fn parse_precedence(&mut self, prec: Prec) {
         self.advance();
 
@@ -109,20 +184,25 @@ impl Compiler {
             return;
         }
 
-        prefix_fn.unwrap()(self);
+        let assignable = prec.power() <= Prec::Assign.power();
+        prefix_fn.unwrap()(self, assignable);
 
         while prec.power() <= self.op_prec(self.curr().token).power() {
             self.advance();
             let infix_fn = self.op_infix(self.prev().token);
-            infix_fn.unwrap()(self);
+            infix_fn.unwrap()(self, assignable);
+        }
+
+        if assignable && self.matches(Token::Eq) {
+            self.error("invalid assignment target");
         }
     }
 
     fn expression(&mut self) {
-        self.parse_precedence(Prec::Or);
+        self.parse_precedence(Prec::Assign);
     }
 
-    fn binary(&mut self) {
+    fn binary(&mut self, _assignable: bool) {
         let operator = self.prev().token;
 
         let prec = self.op_prec(operator);
@@ -144,7 +224,7 @@ impl Compiler {
         }
     }
 
-    fn unary(&mut self) {
+    fn unary(&mut self, _assignable: bool) {
         let operator = self.prev().token;
         self.parse_precedence(Prec::Unary);
         match operator {
@@ -154,12 +234,12 @@ impl Compiler {
         }
     }
 
-    fn grouping(&mut self) {
+    fn grouping(&mut self, _assignable: bool) {
         self.expression();
         self.consume(Token::Rparen, "expect ')' after expression");
     }
 
-    fn literal(&mut self) {
+    fn literal(&mut self, _assignable: bool) {
         match self.prev().token {
             Token::None => self.emit(OpCode::None),
             Token::True => self.emit(OpCode::True),
@@ -168,16 +248,25 @@ impl Compiler {
         }
     }
 
-    fn string(&mut self) {
+    fn variable(&mut self, assignable: bool) {
+        let name = self.prev().slice.to_owned();
+        self.named_variable(name, assignable);
+    }
+
+    fn string(&mut self, _assignable: bool) {
         let lexeme = &self.prev().slice;
         let end = lexeme.len() - 1;
         let copy = lexeme[1..end].to_owned();
         self.emit_constant(Value::Str(copy));
     }
 
-    fn number(&mut self) {
+    fn number(&mut self, _assignable: bool) {
         let value: f64 = self.prev().slice.parse().unwrap();
         self.emit_constant(Value::Num(value));
+    }
+
+    fn make_ident_constant(&mut self, name: String) -> usize {
+        self.make_constant(Value::Str(name))
     }
 
     fn make_constant(&mut self, value: Value) -> usize {
@@ -189,17 +278,29 @@ impl Compiler {
         index
     }
 
+    fn named_variable(&mut self, name: String, assignable: bool) {
+        let idx = self.make_ident_constant(name);
+        if assignable && self.matches(Token::Eq) {
+            self.expression();
+            self.emit(OpCode::SetGlobal);
+            self.emit_byte(idx as u8);
+        } else {
+            self.emit(OpCode::GetGlobal);
+            self.emit_byte(idx as u8);
+        }
+    }
+
+    fn define_variable(&mut self, global: usize) {
+        self.emit(OpCode::DefineGlobal);
+        self.emit_byte(global as u8);
+    }
+
     fn emit(&mut self, opcode: OpCode) {
         self.chunk.write(opcode, self.prev().line);
     }
 
     fn emit_byte(&mut self, byte: u8) {
         self.chunk.write_byte(byte, self.prev().line);
-    }
-
-    fn emit_pair(&mut self, byte1: u8, byte2: u8) {
-        self.emit_byte(byte1);
-        self.emit_byte(byte2);
     }
 
     fn emit_constant(&mut self, value: Value) {
@@ -223,6 +324,7 @@ impl Compiler {
             Token::None => Compiler::literal,
             Token::True => Compiler::literal,
             Token::False => Compiler::literal,
+            Token::Ident => Compiler::variable,
             Token::Str => Compiler::string,
             Token::Num => Compiler::number,
             _ => return None,
@@ -264,12 +366,13 @@ impl Compiler {
     }
 }
 
-type ParseFn = dyn FnMut(&mut Compiler) -> ();
+type ParseFn = dyn FnMut(&mut Compiler, bool) -> ();
 
 #[repr(u8)]
 #[derive(Copy, Clone)]
 enum Prec {
     None,
+    Assign,     // =
     Or,         // or
     And,        // and
     Equality,   // == !=
@@ -288,7 +391,8 @@ impl Prec {
 
     fn stronger(&self) -> Self {
         match self {
-            Prec::None => Prec::Or,
+            Prec::None => Prec::Assign,
+            Prec::Assign => Prec::Or,
             Prec::Or => Prec::And,
             Prec::And => Prec::Equality,
             Prec::Equality => Prec::Comparison,

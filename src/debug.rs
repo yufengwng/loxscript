@@ -30,6 +30,9 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
     return match opcode {
         Constant => constant_instruction(opcode, chunk, offset),
         ConstantLong => constant_instruction(opcode, chunk, offset),
+        DefineGlobal => constant_instruction(opcode, chunk, offset),
+        GetGlobal => constant_instruction(opcode, chunk, offset),
+        SetGlobal => constant_instruction(opcode, chunk, offset),
         None => simple_instruction("OP_NONE", offset),
         True => simple_instruction("OP_TRUE", offset),
         False => simple_instruction("OP_FALSE", offset),
@@ -46,6 +49,7 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
         LtEq => simple_instruction("OP_LESS_EQUAL", offset),
         Gt => simple_instruction("OP_GREATER", offset),
         GtEq => simple_instruction("OP_GREATER_EQUAL", offset),
+        Pop => simple_instruction("OP_POP", offset),
         Return => simple_instruction("OP_RETURN", offset),
     };
 }
@@ -63,6 +67,12 @@ fn simple_instruction(name: &str, offset: usize) -> usize {
 fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {
     let (name, index, count) = if opcode == OpCode::Constant {
         ("OP_CONSTANT", chunk.code(offset + 1) as usize, 2)
+    } else if opcode == OpCode::DefineGlobal {
+        ("OP_DEFINE_GLOBAL", chunk.code(offset + 1) as usize, 2)
+    } else if opcode == OpCode::GetGlobal {
+        ("OP_GET_GLOBAL", chunk.code(offset + 1) as usize, 2)
+    } else if opcode == OpCode::SetGlobal {
+        ("OP_SET_GLOBAL", chunk.code(offset + 1) as usize, 2)
     } else {
         let byte1 = chunk.code(offset + 1) as usize;
         let byte2 = chunk.code(offset + 2) as usize;

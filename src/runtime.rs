@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::convert::TryFrom;
 
 use crate::bytecode::Chunk;
@@ -14,11 +15,15 @@ pub enum InterpretResult {
 
 pub struct VM {
     stack: Vec<Value>,
+    globals: HashMap<String, Value>,
 }
 
 impl VM {
     pub fn new() -> Self {
-        Self { stack: Vec::new() }
+        Self {
+            stack: Vec::new(),
+            globals: HashMap::new(),
+        }
     }
 
     pub fn interpret(&mut self, source: String) -> InterpretResult {
@@ -33,9 +38,9 @@ impl VM {
         let mut frame = CallFrame::new(chunk);
 
         macro_rules! expand {
-            ( $e:expr ) => ({
+            ( $e:expr ) => {{
                 $e
-            });
+            }};
         }
 
         macro_rules! runtime_err {
@@ -47,7 +52,7 @@ impl VM {
         }
 
         macro_rules! bin_add {
-            () => ({
+            () => {{
                 let rhs_is_str = self.stack_peek(0).is_str();
                 let lhs_is_str = self.stack_peek(1).is_str();
                 let rhs_is_num = self.stack_peek(0).is_num();
@@ -65,7 +70,7 @@ impl VM {
                     runtime_err!("operands must be two numbers or two strings");
                     return InterpretResult::RuntimeErr;
                 }
-            });
+            }};
         }
 
         macro_rules! bin_op {
@@ -103,7 +108,7 @@ impl VM {
         }
 
         macro_rules! unary_negate {
-            () => ({
+            () => {{
                 if self.stack_peek(0).is_num() {
                     let num = self.stack_pop().into_num();
                     self.stack_push(Value::Num(-num));
@@ -111,14 +116,14 @@ impl VM {
                     runtime_err!("operand must be a number");
                     return InterpretResult::RuntimeErr;
                 }
-            });
+            }};
         }
 
         macro_rules! unary_not {
-            () => ({
+            () => {{
                 let value = self.stack_pop().is_falsey();
                 self.stack_push(Value::Bool(value));
-            });
+            }};
         }
 
         macro_rules! equality {
@@ -143,6 +148,30 @@ impl VM {
             match opcode {
                 Constant => self.load_const(&mut frame),
                 ConstantLong => self.load_const_long(&mut frame),
+                DefineGlobal => {
+                    let name = frame.read_constant().clone().into_str();
+                    let value = self.stack_pop();
+                    self.globals.insert(name, value);
+                }
+                GetGlobal => {
+                    let name = frame.read_constant().clone().into_str();
+                    let entry = self.globals.get(&name);
+                    if entry.is_none() {
+                        runtime_err!("undefined variable '{}'", name);
+                        return InterpretResult::RuntimeErr;
+                    }
+                    let value = entry.unwrap().clone();
+                    self.stack_push(value);
+                }
+                SetGlobal => {
+                    let name = frame.read_constant().clone().into_str();
+                    if !self.globals.contains_key(&name) {
+                        runtime_err!("undefined variable '{}'", name);
+                        return InterpretResult::RuntimeErr;
+                    }
+                    let value = self.stack_peek(0).clone();
+                    self.globals.insert(name, value);
+                }
                 None => self.stack_push(Value::None),
                 True => self.stack_push(Value::Bool(true)),
                 False => self.stack_push(Value::Bool(false)),
@@ -159,10 +188,13 @@ impl VM {
                 LtEq => bin_op!(Value::Bool, <=),
                 Gt => bin_op!(Value::Bool, >),
                 GtEq => bin_op!(Value::Bool, >=),
+                Pop => {
+                    self.stack_pop();
+                }
                 Return => {
-                    let value = self.stack_pop();
-                    value.print();
-                    println!();
+                    // let value = self.stack_pop();
+                    // value.print();
+                    // println!();
                     return InterpretResult::Ok;
                 }
             }
