@@ -169,7 +169,8 @@ impl VM {
                         runtime_err!("undefined variable '{}'", name);
                         return InterpretResult::RuntimeErr;
                     }
-                    let value = self.stack_peek(0).clone();
+                    let value = self.stack_pop();
+                    self.stack_push(Value::None);
                     self.globals.insert(name, value);
                 }
                 None => self.stack_push(Value::None),
