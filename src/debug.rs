@@ -33,6 +33,8 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
         DefineGlobal => constant_instruction(opcode, chunk, offset),
         GetGlobal => constant_instruction(opcode, chunk, offset),
         SetGlobal => constant_instruction(opcode, chunk, offset),
+        GetLocal => byte_instruction("OP_GET_LOCAL", chunk, offset),
+        SetLocal => byte_instruction("OP_SET_LOCAL", chunk, offset),
         None => simple_instruction("OP_NONE", offset),
         True => simple_instruction("OP_TRUE", offset),
         False => simple_instruction("OP_FALSE", offset),
@@ -62,6 +64,12 @@ fn unknown_instruction(byte: u8, offset: usize) -> usize {
 fn simple_instruction(name: &str, offset: usize) -> usize {
     println!("{}", name);
     return offset + 1;
+}
+
+fn byte_instruction(name: &str, chunk: &Chunk, offset: usize) -> usize {
+    let slot = chunk.code(offset + 1);
+    println!("{:<16} {:4}", name, slot);
+    return offset + 2;
 }
 
 fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {

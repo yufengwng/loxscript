@@ -173,6 +173,17 @@ impl VM {
                     self.stack_push(Value::None);
                     self.globals.insert(name, value);
                 }
+                GetLocal => {
+                    let slot = frame.read_byte() as usize;
+                    let local = self.stack[slot].clone();
+                    self.stack_push(local);
+                }
+                SetLocal => {
+                    let slot = frame.read_byte() as usize;
+                    let value = self.stack_pop();
+                    self.stack_push(Value::None);
+                    self.stack[slot] = value;
+                }
                 None => self.stack_push(Value::None),
                 True => self.stack_push(Value::Bool(true)),
                 False => self.stack_push(Value::Bool(false)),
