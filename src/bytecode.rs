@@ -29,6 +29,8 @@ pub enum OpCode {
     Gt,
     GtEq,
     Pop,
+    Jump,
+    JumpIfFalse,
     Return,
 }
 
@@ -62,6 +64,8 @@ impl TryFrom<u8> for OpCode {
             b if b == Gt as u8 => Gt,
             b if b == GtEq as u8 => GtEq,
             b if b == Pop as u8 => Pop,
+            b if b == Jump as u8 => Jump,
+            b if b == JumpIfFalse as u8 => JumpIfFalse,
             b if b == Return as u8 => Return,
             _ => return Err(()),
         })
@@ -93,6 +97,10 @@ impl Chunk {
 
     pub fn code(&self, offset: usize) -> u8 {
         self.code[offset]
+    }
+
+    pub fn patch(&mut self, offset: usize, byte: u8) {
+        self.code[offset] = byte;
     }
 
     pub fn constant(&self, index: usize) -> &Value {
@@ -142,6 +150,7 @@ impl Chunk {
             self.write(OpCode::Constant, line);
             self.write_byte(index as u8, line);
         } else {
+            // little-endian
             let byte1 = (index & 0xFF) as u8;
             let byte2 = ((index >> 8) & 0xFF) as u8;
             let byte3 = ((index >> 16) & 0xFF) as u8;

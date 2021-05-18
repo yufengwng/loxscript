@@ -203,6 +203,16 @@ impl VM {
                 Pop => {
                     self.stack_pop();
                 }
+                Jump => {
+                    let amount = frame.read_short() as usize;
+                    frame.ip += amount;
+                }
+                JumpIfFalse => {
+                    let amount = frame.read_short() as usize;
+                    if self.stack_peek(0).is_falsey() {
+                        frame.ip += amount;
+                    }
+                }
                 Return => {
                     // let value = self.stack_pop();
                     // value.print();
@@ -267,7 +277,14 @@ impl CallFrame {
     fn read_byte(&mut self) -> u8 {
         let byte = self.chunk.code(self.ip);
         self.ip += 1;
-        return byte;
+        byte
+    }
+
+    fn read_short(&mut self) -> u16 {
+        let byte1 = self.chunk.code(self.ip) as u16;
+        let byte2 = self.chunk.code(self.ip + 1) as u16;
+        self.ip += 2;
+        (byte2 << 8) | byte1
     }
 
     fn read_constant(&mut self) -> &Value {

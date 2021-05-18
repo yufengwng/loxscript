@@ -162,13 +162,35 @@ impl Compiler {
     }
 
     fn statement(&mut self) {
-        if self.matches(Token::Lbrace) {
+        if self.matches(Token::If) {
+            self.stmt_if();
+        } else if self.matches(Token::Lbrace) {
             self.scope_begin();
             self.block();
             self.scope_end();
         } else {
             self.stmt_expression();
         }
+    }
+
+    fn stmt_if(&mut self) {
+        self.expression();
+        self.consume(Token::Lbrace, "expect '{' after condition");
+
+        let then_jump = self.emit_jump(OpCode::JumpIfFalse);
+        self.emit(OpCode::Pop);
+        self.block();
+
+        let else_jump = self.emit_jump(OpCode::Jump);
+        self.patch_jump(then_jump);
+        self.emit(OpCode::Pop);
+
+        if self.matches(Token::Else) {
+            self.consume(Token::Lbrace, "expect '{' after else");
+            self.block();
+        }
+
+        self.patch_jump(else_jump);
     }
 
     fn stmt_expression(&mut self) {
@@ -388,6 +410,23 @@ impl Compiler {
 
     fn emit_return(&mut self) {
         self.emit(OpCode::Return);
+    }
+
+    fn emit_jump(&mut self, opcode: OpCode) -> usize {
+        self.emit(opcode);
+        self.emit_byte(0xFF);
+        self.emit_byte(0xFF);
+        self.chunk.code_len() - 2
+    }
+
+    fn patch_jump(&mut self, offset: usize) {
+        let amount = self.chunk.code_len() - offset - 2;
+        if amount > u16::MAX as usize {
+            self.error("too much code to jump over");
+        }
+        // little-endian
+        self.chunk.patch(offset, (amount & 0xFF) as u8);
+        self.chunk.patch(offset + 1, ((amount >> 8) & 0xFF) as u8);
     }
 
     fn scope_begin(&mut self) {

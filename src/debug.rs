@@ -52,6 +52,8 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
         Gt => simple_instruction("OP_GREATER", offset),
         GtEq => simple_instruction("OP_GREATER_EQUAL", offset),
         Pop => simple_instruction("OP_POP", offset),
+        Jump => jump_instruction("OP_JUMP", true, chunk, offset),
+        JumpIfFalse => jump_instruction("OP_JUMP_IF_FALSE", true, chunk, offset),
         Return => simple_instruction("OP_RETURN", offset),
     };
 }
@@ -70,6 +72,16 @@ fn byte_instruction(name: &str, chunk: &Chunk, offset: usize) -> usize {
     let slot = chunk.code(offset + 1);
     println!("{:<16} {:4}", name, slot);
     return offset + 2;
+}
+
+fn jump_instruction(name: &str, positive: bool, chunk: &Chunk, offset: usize) -> usize {
+    let byte1 = chunk.code(offset + 1) as u16;
+    let byte2 = chunk.code(offset + 2) as u16;
+    let jump = ((byte2 << 8) | byte1) as isize;
+    let jump = if positive { jump } else { jump * -1 };
+    let dest = (offset as isize) + 3 + jump;
+    println!("{:<16} {:4} -> {}", name, offset, dest);
+    return offset + 3;
 }
 
 fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {
