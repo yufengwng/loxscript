@@ -243,6 +243,22 @@ impl Compiler {
         self.parse_precedence(Prec::Assign);
     }
 
+    fn logical_and(&mut self, _assignable: bool) {
+        let end_jump = self.emit_jump(OpCode::JumpIfFalse);
+        self.emit(OpCode::Pop);
+        self.parse_precedence(Prec::And);
+        self.patch_jump(end_jump);
+    }
+
+    fn logical_or(&mut self, _assignable: bool) {
+        let else_jump = self.emit_jump(OpCode::JumpIfFalse);
+        let end_jump = self.emit_jump(OpCode::Jump);
+        self.patch_jump(else_jump);
+        self.emit(OpCode::Pop);
+        self.parse_precedence(Prec::Or);
+        self.patch_jump(end_jump);
+    }
+
     fn binary(&mut self, _assignable: bool) {
         let operator = self.prev().token;
 
@@ -478,6 +494,8 @@ impl Compiler {
             Token::LtEq => Compiler::binary,
             Token::Gt => Compiler::binary,
             Token::GtEq => Compiler::binary,
+            Token::And => Compiler::logical_and,
+            Token::Or => Compiler::logical_or,
             _ => return None,
         }))
     }
@@ -495,6 +513,8 @@ impl Compiler {
             Token::LtEq => Prec::Comparison,
             Token::Gt => Prec::Comparison,
             Token::GtEq => Prec::Comparison,
+            Token::And => Prec::And,
+            Token::Or => Prec::Or,
             _ => Prec::None,
         }
     }
