@@ -164,13 +164,21 @@ impl Compiler {
     fn statement(&mut self) {
         if self.matches(Token::If) {
             self.stmt_if();
+        } else if self.matches(Token::For) {
+            self.stmt_for();
+        } else if self.matches(Token::While) {
+            self.stmt_while();
         } else if self.matches(Token::Lbrace) {
-            self.scope_begin();
-            self.block();
-            self.scope_end();
+            self.stmt_block();
         } else {
             self.stmt_expression();
         }
+    }
+
+    fn stmt_block(&mut self) {
+        self.scope_begin();
+        self.block();
+        self.scope_end();
     }
 
     fn stmt_if(&mut self) {
@@ -179,7 +187,7 @@ impl Compiler {
 
         let then_jump = self.emit_jump(OpCode::JumpIfFalse);
         self.emit(OpCode::Pop);
-        self.block();
+        self.stmt_block();
 
         let else_jump = self.emit_jump(OpCode::Jump);
         self.patch_jump(then_jump);
@@ -187,10 +195,69 @@ impl Compiler {
 
         if self.matches(Token::Else) {
             self.consume(Token::Lbrace, "expect '{' after else");
-            self.block();
+            self.stmt_block();
         }
 
         self.patch_jump(else_jump);
+    }
+
+    fn stmt_while(&mut self) {
+        let loop_start = self.chunk.code_len();
+        self.expression();
+        self.consume(Token::Lbrace, "expect '{' after condition");
+
+        let exit_jump = self.emit_jump(OpCode::JumpIfFalse);
+        self.emit(OpCode::Pop);
+        self.stmt_block();
+        self.emit_loop(loop_start);
+
+        self.patch_jump(exit_jump);
+        self.emit(OpCode::Pop);
+    }
+
+    fn stmt_for(&mut self) {
+        self.scope_begin();
+        if self.matches(Token::Semi) {
+            // No initializer clause
+        } else if self.matches(Token::Let) {
+            self.decl_let();
+        } else {
+            self.stmt_expression();
+        }
+
+        let mut loop_start = self.chunk.code_len();
+        let exit_jump = if !self.matches(Token::Semi) {
+            self.expression();
+            self.consume(Token::Semi, "expect ';' after loop condition");
+            let exit = self.emit_jump(OpCode::JumpIfFalse);
+            self.emit(OpCode::Pop);
+            Some(exit)
+        } else {
+            None
+        };
+
+        if !self.matches(Token::Lbrace) {
+            let body_jump = self.emit_jump(OpCode::Jump);
+
+            let incr_start = self.chunk.code_len();
+            self.expression();
+            self.emit(OpCode::Pop);
+            self.consume(Token::Lbrace, "expect '{' after for clauses");
+
+            self.emit_loop(loop_start);
+            self.patch_jump(body_jump);
+            loop_start = incr_start;
+        }
+
+        self.stmt_block();
+        self.emit_loop(loop_start);
+
+        if let Some(exit) = exit_jump {
+            self.patch_jump(exit);
+            self.emit(OpCode::Pop);
+        }
+
+        self.scope_end();
     }
 
     fn stmt_expression(&mut self) {
@@ -426,6 +493,19 @@ impl Compiler {
 
     fn emit_return(&mut self) {
         self.emit(OpCode::Return);
+    }
+
+    fn emit_loop(&mut self, loop_start: usize) {
+        self.emit(OpCode::Loop);
+
+        let offset = self.chunk.code_len() - loop_start + 2;
+        if offset > u16::MAX as usize {
+            self.error("loop body too large");
+        }
+
+        // little-endian
+        self.emit_byte((offset & 0xFF) as u8);
+        self.emit_byte(((offset >> 8) & 0xFF) as u8);
     }
 
     fn emit_jump(&mut self, opcode: OpCode) -> usize {

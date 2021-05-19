@@ -203,6 +203,10 @@ impl VM {
                 Pop => {
                     self.stack_pop();
                 }
+                Loop => {
+                    let offset = frame.read_short() as usize;
+                    frame.ip -= offset;
+                }
                 Jump => {
                     let amount = frame.read_short() as usize;
                     frame.ip += amount;
