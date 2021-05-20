@@ -185,20 +185,36 @@ impl Compiler {
         self.expression();
         self.consume(Token::Lbrace, "expect '{' after condition");
 
-        let then_jump = self.emit_jump(OpCode::JumpIfFalse);
+        let mut then_jump = self.emit_jump(OpCode::JumpIfFalse);
         self.emit(OpCode::Pop);
         self.stmt_block();
 
-        let else_jump = self.emit_jump(OpCode::Jump);
+        let mut exits = Vec::new();
+        exits.push(self.emit_jump(OpCode::Jump));
         self.patch_jump(then_jump);
         self.emit(OpCode::Pop);
+
+        while self.matches(Token::Elif) {
+            self.expression();
+            self.consume(Token::Lbrace, "expect '{' after condition");
+
+            then_jump = self.emit_jump(OpCode::JumpIfFalse);
+            self.emit(OpCode::Pop);
+            self.stmt_block();
+
+            exits.push(self.emit_jump(OpCode::Jump));
+            self.patch_jump(then_jump);
+            self.emit(OpCode::Pop);
+        }
 
         if self.matches(Token::Else) {
             self.consume(Token::Lbrace, "expect '{' after else");
             self.stmt_block();
         }
 
-        self.patch_jump(else_jump);
+        for exit in exits {
+            self.patch_jump(exit);
+        }
     }
 
     fn stmt_while(&mut self) {
