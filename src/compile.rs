@@ -14,7 +14,7 @@ pub fn compile(source: String) -> Option<Chunk> {
 struct Compiler {
     scanner: Scanner,
     chunk: Chunk,
-    scope: Scope,
+    ctx: Context,
     curr: Option<Span>,
     prev: Option<Span>,
     had_error: bool,
@@ -26,7 +26,7 @@ impl Compiler {
         Self {
             scanner: Scanner::new(source),
             chunk: Chunk::new(),
-            scope: Scope::new(),
+            ctx: Context::new(),
             curr: None,
             prev: None,
             had_error: false,
@@ -168,6 +168,10 @@ impl Compiler {
             self.stmt_for();
         } else if self.matches(Token::While) {
             self.stmt_while();
+        } else if self.matches(Token::Break) {
+            self.stmt_break();
+        } else if self.matches(Token::Continue) {
+            self.stmt_continue();
         } else if self.matches(Token::Lbrace) {
             self.stmt_block();
         } else {
@@ -179,6 +183,49 @@ impl Compiler {
         self.scope_begin();
         self.block();
         self.scope_end();
+    }
+
+    fn stmt_break(&mut self) {
+        if self.ctx.loop_breaks.is_empty() {
+            self.error("cannot use 'break' outside of a loop");
+            return;
+        }
+
+        self.consume(Token::Semi, "expect ';' after break");
+        let loop_depth = self.ctx.loop_depths.last().unwrap().clone();
+        for i in (0..self.ctx.locals.len()).rev() {
+            let local_depth = self.ctx.locals[i].depth;
+            if local_depth > loop_depth {
+                self.emit(OpCode::Pop);
+            } else {
+                break;
+            }
+        }
+
+        let jump = self.emit_jump(OpCode::Jump);
+        let breaks = self.ctx.loop_breaks.last_mut().unwrap();
+        breaks.push(jump);
+    }
+
+    fn stmt_continue(&mut self) {
+        if self.ctx.loop_starts.is_empty() {
+            self.error("cannot use 'continue' outside of a loop");
+            return;
+        }
+
+        self.consume(Token::Semi, "expect ';' after continue");
+        let loop_depth = self.ctx.loop_depths.last().unwrap().clone();
+        for i in (0..self.ctx.locals.len()).rev() {
+            let local_depth = self.ctx.locals[i].depth;
+            if local_depth > loop_depth {
+                self.emit(OpCode::Pop);
+            } else {
+                break;
+            }
+        }
+
+        let start = self.ctx.loop_starts.last().unwrap().clone();
+        self.emit_loop(start);
     }
 
     fn stmt_if(&mut self) {
@@ -219,6 +266,8 @@ impl Compiler {
 
     fn stmt_while(&mut self) {
         let loop_start = self.chunk.code_len();
+        self.loop_begin(loop_start);
+
         self.expression();
         self.consume(Token::Lbrace, "expect '{' after condition");
 
@@ -229,6 +278,11 @@ impl Compiler {
 
         self.patch_jump(exit_jump);
         self.emit(OpCode::Pop);
+
+        let breaks = self.loop_end();
+        for jump in breaks {
+            self.patch_jump(jump);
+        }
     }
 
     fn stmt_for(&mut self) {
@@ -265,12 +319,18 @@ impl Compiler {
             loop_start = incr_start;
         }
 
+        self.loop_begin(loop_start);
         self.stmt_block();
         self.emit_loop(loop_start);
 
         if let Some(exit) = exit_jump {
             self.patch_jump(exit);
             self.emit(OpCode::Pop);
+        }
+
+        let breaks = self.loop_end();
+        for jump in breaks {
+            self.patch_jump(jump);
         }
 
         self.scope_end();
@@ -292,7 +352,7 @@ impl Compiler {
     fn parse_variable(&mut self, message: &str) -> usize {
         self.consume(Token::Ident, message);
         self.declare_variable();
-        if self.scope.depth > 0 {
+        if self.ctx.depth > 0 {
             return 0;
         }
         let name = self.prev().slice.to_owned();
@@ -440,13 +500,13 @@ impl Compiler {
     }
 
     fn declare_variable(&mut self) {
-        if self.scope.depth == 0 {
+        if self.ctx.depth == 0 {
             return;
         }
         let name = self.prev().slice.to_owned();
         let mut already_exists = false;
-        for local in self.scope.locals.iter().rev() {
-            if local.initialized && local.depth < self.scope.depth {
+        for local in self.ctx.locals.iter().rev() {
+            if local.initialized && local.depth < self.ctx.depth {
                 break;
             }
             if local.name == name {
@@ -461,7 +521,7 @@ impl Compiler {
     }
 
     fn define_variable(&mut self, global: usize) {
-        if self.scope.depth > 0 {
+        if self.ctx.depth > 0 {
             self.initialize_local();
             return;
         }
@@ -470,20 +530,20 @@ impl Compiler {
     }
 
     fn add_local(&mut self, name: String) {
-        if self.scope.locals.len() > u8::MAX as usize {
+        if self.ctx.locals.len() > u8::MAX as usize {
             self.error("too many local variables in function");
             return;
         }
-        let local = Local::new(name, self.scope.depth);
-        self.scope.locals.push(local);
+        let local = Local::new(name, self.ctx.depth);
+        self.ctx.locals.push(local);
     }
 
     fn initialize_local(&mut self) {
-        self.scope.locals.last_mut().unwrap().initialized = true;
+        self.ctx.locals.last_mut().unwrap().initialized = true;
     }
 
     fn resolve_local(&mut self, name: &str) -> Option<usize> {
-        for (idx, local) in self.scope.locals.iter().enumerate().rev() {
+        for (idx, local) in self.ctx.locals.iter().enumerate().rev() {
             if local.name == name {
                 if !local.initialized {
                     self.error("can't read local variable in its own initializer");
@@ -542,20 +602,32 @@ impl Compiler {
     }
 
     fn scope_begin(&mut self) {
-        self.scope.depth += 1;
+        self.ctx.depth += 1;
     }
 
     fn scope_end(&mut self) {
-        self.scope.depth -= 1;
-        while !self.scope.locals.is_empty() {
-            let local_depth = self.scope.locals.last().unwrap().depth;
-            if local_depth > self.scope.depth {
-                self.scope.locals.pop();
+        self.ctx.depth -= 1;
+        while !self.ctx.locals.is_empty() {
+            let local_depth = self.ctx.locals.last().unwrap().depth;
+            if local_depth > self.ctx.depth {
+                self.ctx.locals.pop();
                 self.emit(OpCode::Pop);
             } else {
                 break;
             }
         }
+    }
+
+    fn loop_begin(&mut self, start: usize) {
+        self.ctx.loop_breaks.push(Vec::new());
+        self.ctx.loop_depths.push(self.ctx.depth);
+        self.ctx.loop_starts.push(start);
+    }
+
+    fn loop_end(&mut self) -> Vec<usize> {
+        self.ctx.loop_starts.pop();
+        self.ctx.loop_depths.pop();
+        self.ctx.loop_breaks.pop().unwrap()
     }
 
     fn end(&mut self) {
@@ -656,15 +728,21 @@ impl Prec {
     }
 }
 
-struct Scope {
+struct Context {
     locals: Vec<Local>,
+    loop_breaks: Vec<Vec<usize>>,
+    loop_depths: Vec<usize>,
+    loop_starts: Vec<usize>,
     depth: usize,
 }
 
-impl Scope {
+impl Context {
     fn new() -> Self {
         Self {
             locals: Vec::new(),
+            loop_breaks: Vec::new(),
+            loop_depths: Vec::new(),
+            loop_starts: Vec::new(),
             depth: 0,
         }
     }
