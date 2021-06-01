@@ -5,15 +5,15 @@ use crate::debug;
 use crate::scan::Scanner;
 use crate::scan::Span;
 use crate::scan::Token;
+use crate::value::ObjFn;
 use crate::value::Value;
 
-pub fn compile(source: String) -> Option<Chunk> {
+pub fn compile(source: String) -> Option<ObjFn> {
     Compiler::new(source).compile()
 }
 
 struct Compiler {
     scanner: Scanner,
-    chunk: Chunk,
     ctx: Context,
     curr: Option<Span>,
     prev: Option<Span>,
@@ -23,10 +23,11 @@ struct Compiler {
 
 impl Compiler {
     pub fn new(source: String) -> Self {
+        let mut ctx = Context::new();
+        ctx.init("", FnKind::Script);
         Self {
             scanner: Scanner::new(source),
-            chunk: Chunk::new(),
-            ctx: Context::new(),
+            ctx,
             curr: None,
             prev: None,
             had_error: false,
@@ -34,18 +35,27 @@ impl Compiler {
         }
     }
 
-    pub fn compile(mut self) -> Option<Chunk> {
+    pub fn compile(mut self) -> Option<ObjFn> {
         self.advance();
         while !self.matches(Token::EOF) {
             self.declaration();
         }
         self.end();
         if !self.had_error {
-            debug::disassemble(&self.chunk, "code");
-            Some(self.chunk)
+            let name = if !self.ctx.function.name.is_empty() {
+                self.ctx.function.name.to_owned()
+            } else {
+                "<script>".to_owned()
+            };
+            debug::disassemble(self.chunk(), &name);
+            Some(self.ctx.function)
         } else {
             None
         }
+    }
+
+    fn chunk(&mut self) -> &mut Chunk {
+        &mut self.ctx.function.chunk
     }
 
     fn curr(&self) -> &Span {
@@ -265,7 +275,7 @@ impl Compiler {
     }
 
     fn stmt_while(&mut self) {
-        let loop_start = self.chunk.code_len();
+        let loop_start = self.chunk().code_len();
         self.loop_begin(loop_start);
 
         self.expression();
@@ -295,7 +305,7 @@ impl Compiler {
             self.stmt_expression();
         }
 
-        let mut loop_start = self.chunk.code_len();
+        let mut loop_start = self.chunk().code_len();
         let exit_jump = if !self.matches(Token::Semi) {
             self.expression();
             self.consume(Token::Semi, "expect ';' after loop condition");
@@ -309,7 +319,7 @@ impl Compiler {
         if !self.matches(Token::Lbrace) {
             let body_jump = self.emit_jump(OpCode::Jump);
 
-            let incr_start = self.chunk.code_len();
+            let incr_start = self.chunk().code_len();
             self.expression();
             self.emit(OpCode::Pop);
             self.consume(Token::Lbrace, "expect '{' after for clauses");
@@ -470,7 +480,7 @@ impl Compiler {
     }
 
     fn make_constant(&mut self, value: Value) -> usize {
-        let index = self.chunk.add_constant(value);
+        let index = self.chunk().add_constant(value);
         if index > MAX_CONST_INDEX {
             self.error("too many constants in one chunk");
             return 0;
@@ -555,16 +565,19 @@ impl Compiler {
     }
 
     fn emit(&mut self, opcode: OpCode) {
-        self.chunk.write(opcode, self.prev().line);
+        let line = self.prev().line;
+        self.chunk().write(opcode, line);
     }
 
     fn emit_byte(&mut self, byte: u8) {
-        self.chunk.write_byte(byte, self.prev().line);
+        let line = self.prev().line;
+        self.chunk().write_byte(byte, line);
     }
 
     fn emit_constant(&mut self, value: Value) {
         let index = self.make_constant(value);
-        self.chunk.write_load(index, self.prev().line);
+        let line = self.prev().line;
+        self.chunk().write_load(index, line);
     }
 
     fn emit_return(&mut self) {
@@ -574,7 +587,7 @@ impl Compiler {
     fn emit_loop(&mut self, loop_start: usize) {
         self.emit(OpCode::Loop);
 
-        let offset = self.chunk.code_len() - loop_start + 2;
+        let offset = self.chunk().code_len() - loop_start + 2;
         if offset > u16::MAX as usize {
             self.error("loop body too large");
         }
@@ -588,17 +601,17 @@ impl Compiler {
         self.emit(opcode);
         self.emit_byte(0xFF);
         self.emit_byte(0xFF);
-        self.chunk.code_len() - 2
+        self.chunk().code_len() - 2
     }
 
     fn patch_jump(&mut self, offset: usize) {
-        let amount = self.chunk.code_len() - offset - 2;
+        let amount = self.chunk().code_len() - offset - 2;
         if amount > u16::MAX as usize {
             self.error("too much code to jump over");
         }
         // little-endian
-        self.chunk.patch(offset, (amount & 0xFF) as u8);
-        self.chunk.patch(offset + 1, ((amount >> 8) & 0xFF) as u8);
+        self.chunk().patch(offset, (amount & 0xFF) as u8);
+        self.chunk().patch(offset + 1, ((amount >> 8) & 0xFF) as u8);
     }
 
     fn scope_begin(&mut self) {
@@ -728,7 +741,14 @@ impl Prec {
     }
 }
 
+enum FnKind {
+    Script,
+    Function,
+}
+
 struct Context {
+    function: ObjFn,
+    fn_kind: FnKind,
     locals: Vec<Local>,
     loop_breaks: Vec<Vec<usize>>,
     loop_depths: Vec<usize>,
@@ -739,12 +759,20 @@ struct Context {
 impl Context {
     fn new() -> Self {
         Self {
+            function: ObjFn::new(),
+            fn_kind: FnKind::Script,
             locals: Vec::new(),
             loop_breaks: Vec::new(),
             loop_depths: Vec::new(),
             loop_starts: Vec::new(),
             depth: 0,
         }
+    }
+
+    fn init(&mut self, fn_name: &str, fn_kind: FnKind) {
+        self.fn_kind = fn_kind;
+        self.function.name = String::from(fn_name);
+        self.locals.push(Local::new(String::new(), 0));
     }
 }
 

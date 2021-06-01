@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::rc::Rc;
 
-use crate::bytecode::Chunk;
 use crate::bytecode::OpCode;
 use crate::compile;
 use crate::debug;
+use crate::value::ObjFn;
 use crate::value::Value;
 
 pub enum InterpretResult {
@@ -15,6 +16,7 @@ pub enum InterpretResult {
 
 pub struct VM {
     stack: Vec<Value>,
+    frames: Vec<CallFrame>,
     globals: HashMap<String, Value>,
 }
 
@@ -22,20 +24,29 @@ impl VM {
     pub fn new() -> Self {
         Self {
             stack: Vec::new(),
+            frames: Vec::new(),
             globals: HashMap::new(),
         }
     }
 
     pub fn interpret(&mut self, source: String) -> InterpretResult {
-        match compile::compile(source) {
-            Some(chunk) => self.run(chunk),
-            None => InterpretResult::CompileErr,
-        }
+        let fn_rc = match compile::compile(source) {
+            Some(fn_obj) => Rc::new(fn_obj),
+            None => return InterpretResult::CompileErr,
+        };
+
+        self.stack_push(Value::Fun(fn_rc.clone()));
+
+        let mut frame = CallFrame::new(fn_rc);
+        frame.base_slot = self.stack.len();
+        self.frames.push(frame);
+
+        self.run()
     }
 
-    fn run(&mut self, chunk: Chunk) -> InterpretResult {
+    fn run(&mut self) -> InterpretResult {
         use OpCode::*;
-        let mut frame = CallFrame::new(chunk);
+        let mut frame = self.frames.pop().unwrap();
 
         macro_rules! expand {
             ( $e:expr ) => {{
@@ -136,7 +147,7 @@ impl VM {
 
         loop {
             self.stack_print();
-            debug::disassemble_at(&frame.chunk, frame.ip);
+            debug::disassemble_at(&frame.function.chunk, frame.ip);
             let byte = frame.read_byte();
             let opcode = match OpCode::try_from(byte) {
                 Ok(op) => op,
@@ -174,12 +185,14 @@ impl VM {
                     self.globals.insert(name, value);
                 }
                 GetLocal => {
-                    let slot = frame.read_byte() as usize;
+                    let mut slot = frame.read_byte() as usize;
+                    slot += frame.base_slot;
                     let local = self.stack[slot].clone();
                     self.stack_push(local);
                 }
                 SetLocal => {
-                    let slot = frame.read_byte() as usize;
+                    let mut slot = frame.read_byte() as usize;
+                    slot += frame.base_slot;
                     let value = self.stack_pop();
                     self.stack_push(Value::None);
                     self.stack[slot] = value;
@@ -218,9 +231,9 @@ impl VM {
                     }
                 }
                 Return => {
-                    // let value = self.stack_pop();
-                    // value.print();
-                    // println!();
+                    let value = self.stack_pop();
+                    value.print();
+                    println!();
                     return InterpretResult::Ok;
                 }
             }
@@ -265,35 +278,40 @@ impl VM {
 }
 
 struct CallFrame {
-    chunk: Chunk,
+    function: Rc<ObjFn>,
+    base_slot: usize,
     ip: usize,
 }
 
 impl CallFrame {
-    fn new(chunk: Chunk) -> Self {
-        Self { chunk, ip: 0 }
+    fn new(fn_obj: Rc<ObjFn>) -> Self {
+        Self {
+            function: fn_obj,
+            base_slot: 0,
+            ip: 0,
+        }
     }
 
     fn curr_line(&self) -> usize {
-        self.chunk.line(self.ip)
+        self.function.chunk.line(self.ip)
     }
 
     fn read_byte(&mut self) -> u8 {
-        let byte = self.chunk.code(self.ip);
+        let byte = self.function.chunk.code(self.ip);
         self.ip += 1;
         byte
     }
 
     fn read_short(&mut self) -> u16 {
-        let byte1 = self.chunk.code(self.ip) as u16;
-        let byte2 = self.chunk.code(self.ip + 1) as u16;
+        let byte1 = self.function.chunk.code(self.ip) as u16;
+        let byte2 = self.function.chunk.code(self.ip + 1) as u16;
         self.ip += 2;
         (byte2 << 8) | byte1
     }
 
     fn read_constant(&mut self) -> &Value {
         let index = self.read_byte() as usize;
-        self.chunk.constant(index)
+        self.function.chunk.constant(index)
     }
 
     fn read_constant_long(&mut self) -> &Value {
@@ -301,6 +319,6 @@ impl CallFrame {
         let byte2 = self.read_byte() as usize;
         let byte3 = self.read_byte() as usize;
         let index = (byte3 << 16) | (byte2 << 8) | byte1;
-        self.chunk.constant(index)
+        self.function.chunk.constant(index)
     }
 }
