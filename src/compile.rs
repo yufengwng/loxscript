@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::bytecode::Chunk;
 use crate::bytecode::OpCode;
 use crate::bytecode::MAX_CONST_INDEX;
@@ -14,7 +16,7 @@ pub fn compile(source: String) -> Option<ObjFn> {
 
 struct Compiler {
     scanner: Scanner,
-    ctx: Context,
+    contexts: Vec<Context>,
     curr: Option<Span>,
     prev: Option<Span>,
     had_error: bool,
@@ -23,16 +25,16 @@ struct Compiler {
 
 impl Compiler {
     pub fn new(source: String) -> Self {
-        let mut ctx = Context::new();
-        ctx.init("", FnKind::Script);
-        Self {
+        let mut this = Self {
             scanner: Scanner::new(source),
-            ctx,
+            contexts: Vec::new(),
             curr: None,
             prev: None,
             had_error: false,
             panic_mode: false,
-        }
+        };
+        this.ctx_init(FnKind::Script);
+        this
     }
 
     pub fn compile(mut self) -> Option<ObjFn> {
@@ -40,22 +42,28 @@ impl Compiler {
         while !self.matches(Token::EOF) {
             self.declaration();
         }
-        self.end();
+        let fn_obj = self.ctx_end();
         if !self.had_error {
-            let name = if !self.ctx.function.name.is_empty() {
-                self.ctx.function.name.to_owned()
-            } else {
-                "<script>".to_owned()
-            };
-            debug::disassemble(self.chunk(), &name);
-            Some(self.ctx.function)
+            Some(fn_obj)
         } else {
             None
         }
     }
 
-    fn chunk(&mut self) -> &mut Chunk {
-        &mut self.ctx.function.chunk
+    fn ctx(&self) -> &Context {
+        self.contexts.last().unwrap()
+    }
+
+    fn ctx_mut(&mut self) -> &mut Context {
+        self.contexts.last_mut().unwrap()
+    }
+
+    fn chunk(&self) -> &Chunk {
+        &self.ctx().function.chunk
+    }
+
+    fn chunk_mut(&mut self) -> &mut Chunk {
+        &mut self.ctx_mut().function.chunk
     }
 
     fn curr(&self) -> &Span {
@@ -151,6 +159,8 @@ impl Compiler {
     fn declaration(&mut self) {
         if self.matches(Token::Let) {
             self.decl_let();
+        } else if self.matches(Token::Fun) {
+            self.decl_function();
         } else {
             self.statement();
         }
@@ -168,6 +178,15 @@ impl Compiler {
             self.emit(OpCode::None);
         }
         self.consume(Token::Semi, "expect ';' after variable declaration");
+        self.define_variable(global_idx);
+    }
+
+    fn decl_function(&mut self) {
+        let global_idx = self.parse_variable("expect function name");
+        if self.ctx().depth > 0 {
+            self.initialize_local();
+        }
+        self.function(FnKind::Function);
         self.define_variable(global_idx);
     }
 
@@ -196,45 +215,55 @@ impl Compiler {
     }
 
     fn stmt_break(&mut self) {
-        if self.ctx.loop_breaks.is_empty() {
+        if self.ctx().loop_breaks.is_empty() {
             self.error("cannot use 'break' outside of a loop");
             return;
         }
 
         self.consume(Token::Semi, "expect ';' after break");
-        let loop_depth = self.ctx.loop_depths.last().unwrap().clone();
-        for i in (0..self.ctx.locals.len()).rev() {
-            let local_depth = self.ctx.locals[i].depth;
+        let mut num_pops = 0;
+        let ctx = self.ctx();
+        let loop_depth = ctx.loop_depths.last().unwrap().clone();
+        for i in (0..ctx.locals.len()).rev() {
+            let local_depth = ctx.locals[i].depth;
             if local_depth > loop_depth {
-                self.emit(OpCode::Pop);
+                num_pops += 1;
             } else {
                 break;
             }
         }
+        for _ in 0..num_pops {
+            self.emit(OpCode::Pop);
+        }
 
         let jump = self.emit_jump(OpCode::Jump);
-        let breaks = self.ctx.loop_breaks.last_mut().unwrap();
+        let breaks = self.ctx_mut().loop_breaks.last_mut().unwrap();
         breaks.push(jump);
     }
 
     fn stmt_continue(&mut self) {
-        if self.ctx.loop_starts.is_empty() {
+        if self.ctx().loop_starts.is_empty() {
             self.error("cannot use 'continue' outside of a loop");
             return;
         }
 
         self.consume(Token::Semi, "expect ';' after continue");
-        let loop_depth = self.ctx.loop_depths.last().unwrap().clone();
-        for i in (0..self.ctx.locals.len()).rev() {
-            let local_depth = self.ctx.locals[i].depth;
+        let mut num_pops = 0;
+        let ctx = self.ctx();
+        let loop_depth = ctx.loop_depths.last().unwrap().clone();
+        for i in (0..ctx.locals.len()).rev() {
+            let local_depth = ctx.locals[i].depth;
             if local_depth > loop_depth {
-                self.emit(OpCode::Pop);
+                num_pops += 1;
             } else {
                 break;
             }
         }
+        for _ in 0..num_pops {
+            self.emit(OpCode::Pop);
+        }
 
-        let start = self.ctx.loop_starts.last().unwrap().clone();
+        let start = self.ctx().loop_starts.last().unwrap().clone();
         self.emit_loop(start);
     }
 
@@ -352,6 +381,33 @@ impl Compiler {
         self.emit(OpCode::Pop);
     }
 
+    fn function(&mut self, fn_kind: FnKind) {
+        self.ctx_init(fn_kind);
+        self.scope_begin();
+
+        self.consume(Token::Lparen, "expect '(' after function name");
+        if !self.check(Token::Rparen) {
+            loop {
+                let ctx = self.ctx_mut();
+                ctx.function.arity += 1;
+                if ctx.function.arity > 255 {
+                    self.error_curr("can't have more than 255 parameters");
+                }
+                let const_idx = self.parse_variable("expect parameter name");
+                self.define_variable(const_idx);
+                if !self.matches(Token::Comma) {
+                    break;
+                }
+            }
+        }
+        self.consume(Token::Rparen, "expect ')' after parameters");
+        self.consume(Token::Lbrace, "expect '{' before function body");
+        self.block();
+
+        let fn_obj = self.ctx_end();
+        self.emit_constant(Value::Fun(Rc::new(fn_obj)));
+    }
+
     fn block(&mut self) {
         while !self.check(Token::Rbrace) && !self.check(Token::EOF) {
             self.declaration();
@@ -362,7 +418,7 @@ impl Compiler {
     fn parse_variable(&mut self, message: &str) -> usize {
         self.consume(Token::Ident, message);
         self.declare_variable();
-        if self.ctx.depth > 0 {
+        if self.ctx().depth > 0 {
             return 0;
         }
         let name = self.prev().slice.to_owned();
@@ -480,7 +536,7 @@ impl Compiler {
     }
 
     fn make_constant(&mut self, value: Value) -> usize {
-        let index = self.chunk().add_constant(value);
+        let index = self.chunk_mut().add_constant(value);
         if index > MAX_CONST_INDEX {
             self.error("too many constants in one chunk");
             return 0;
@@ -510,13 +566,14 @@ impl Compiler {
     }
 
     fn declare_variable(&mut self) {
-        if self.ctx.depth == 0 {
+        let ctx = self.ctx();
+        if ctx.depth == 0 {
             return;
         }
         let name = self.prev().slice.to_owned();
         let mut already_exists = false;
-        for local in self.ctx.locals.iter().rev() {
-            if local.initialized && local.depth < self.ctx.depth {
+        for local in ctx.locals.iter().rev() {
+            if local.initialized && local.depth < ctx.depth {
                 break;
             }
             if local.name == name {
@@ -531,7 +588,7 @@ impl Compiler {
     }
 
     fn define_variable(&mut self, global: usize) {
-        if self.ctx.depth > 0 {
+        if self.ctx().depth > 0 {
             self.initialize_local();
             return;
         }
@@ -540,20 +597,21 @@ impl Compiler {
     }
 
     fn add_local(&mut self, name: String) {
-        if self.ctx.locals.len() > u8::MAX as usize {
+        let ctx = self.ctx();
+        if ctx.locals.len() > u8::MAX as usize {
             self.error("too many local variables in function");
             return;
         }
-        let local = Local::new(name, self.ctx.depth);
-        self.ctx.locals.push(local);
+        let local = Local::new(name, ctx.depth);
+        self.ctx_mut().locals.push(local);
     }
 
     fn initialize_local(&mut self) {
-        self.ctx.locals.last_mut().unwrap().initialized = true;
+        self.ctx_mut().locals.last_mut().unwrap().initialized = true;
     }
 
     fn resolve_local(&mut self, name: &str) -> Option<usize> {
-        for (idx, local) in self.ctx.locals.iter().enumerate().rev() {
+        for (idx, local) in self.ctx().locals.iter().enumerate().rev() {
             if local.name == name {
                 if !local.initialized {
                     self.error("can't read local variable in its own initializer");
@@ -566,18 +624,18 @@ impl Compiler {
 
     fn emit(&mut self, opcode: OpCode) {
         let line = self.prev().line;
-        self.chunk().write(opcode, line);
+        self.chunk_mut().write(opcode, line);
     }
 
     fn emit_byte(&mut self, byte: u8) {
         let line = self.prev().line;
-        self.chunk().write_byte(byte, line);
+        self.chunk_mut().write_byte(byte, line);
     }
 
     fn emit_constant(&mut self, value: Value) {
         let index = self.make_constant(value);
         let line = self.prev().line;
-        self.chunk().write_load(index, line);
+        self.chunk_mut().write_load(index, line);
     }
 
     fn emit_return(&mut self) {
@@ -610,41 +668,73 @@ impl Compiler {
             self.error("too much code to jump over");
         }
         // little-endian
-        self.chunk().patch(offset, (amount & 0xFF) as u8);
-        self.chunk().patch(offset + 1, ((amount >> 8) & 0xFF) as u8);
+        let chunk = self.chunk_mut();
+        chunk.patch(offset, (amount & 0xFF) as u8);
+        chunk.patch(offset + 1, ((amount >> 8) & 0xFF) as u8);
+    }
+
+    fn ctx_init(&mut self, fn_kind: FnKind) {
+        let mut ctx = Context::new();
+        if fn_kind != FnKind::Script {
+            let name = &self.prev().slice;
+            ctx.function.name = name.to_owned();
+        }
+        ctx.fn_kind = fn_kind;
+        ctx.locals.push(Local::new(String::new(), 0));
+        self.contexts.push(ctx);
+    }
+
+    fn ctx_end(&mut self) -> ObjFn {
+        self.emit_return();
+        let ctx = self.contexts.pop().unwrap();
+        let fn_obj = ctx.function;
+        if !self.had_error {
+            let name = if !fn_obj.name.is_empty() {
+                fn_obj.name.to_owned()
+            } else {
+                "<script>".to_owned()
+            };
+            debug::disassemble(&fn_obj.chunk, &name);
+        }
+        fn_obj
     }
 
     fn scope_begin(&mut self) {
-        self.ctx.depth += 1;
+        self.ctx_mut().depth += 1;
     }
 
     fn scope_end(&mut self) {
-        self.ctx.depth -= 1;
-        while !self.ctx.locals.is_empty() {
-            let local_depth = self.ctx.locals.last().unwrap().depth;
-            if local_depth > self.ctx.depth {
-                self.ctx.locals.pop();
-                self.emit(OpCode::Pop);
+        let ctx = self.ctx_mut();
+        ctx.depth -= 1;
+
+        let mut num_pops = 0;
+        while !ctx.locals.is_empty() {
+            let local_depth = ctx.locals.last().unwrap().depth;
+            if local_depth > ctx.depth {
+                ctx.locals.pop();
+                num_pops += 1;
             } else {
                 break;
             }
         }
+
+        for _ in 0..num_pops {
+            self.emit(OpCode::Pop);
+        }
     }
 
     fn loop_begin(&mut self, start: usize) {
-        self.ctx.loop_breaks.push(Vec::new());
-        self.ctx.loop_depths.push(self.ctx.depth);
-        self.ctx.loop_starts.push(start);
+        let ctx = self.ctx_mut();
+        ctx.loop_breaks.push(Vec::new());
+        ctx.loop_depths.push(ctx.depth);
+        ctx.loop_starts.push(start);
     }
 
     fn loop_end(&mut self) -> Vec<usize> {
-        self.ctx.loop_starts.pop();
-        self.ctx.loop_depths.pop();
-        self.ctx.loop_breaks.pop().unwrap()
-    }
-
-    fn end(&mut self) {
-        self.emit_return();
+        let ctx = self.ctx_mut();
+        ctx.loop_starts.pop();
+        ctx.loop_depths.pop();
+        ctx.loop_breaks.pop().unwrap()
     }
 
     fn op_prefix(&self, token: Token) -> Option<Box<ParseFn>> {
@@ -741,6 +831,7 @@ impl Prec {
     }
 }
 
+#[derive(PartialEq)]
 enum FnKind {
     Script,
     Function,
@@ -767,12 +858,6 @@ impl Context {
             loop_starts: Vec::new(),
             depth: 0,
         }
-    }
-
-    fn init(&mut self, fn_name: &str, fn_kind: FnKind) {
-        self.fn_kind = fn_kind;
-        self.function.name = String::from(fn_name);
-        self.locals.push(Local::new(String::new(), 0));
     }
 }
 
