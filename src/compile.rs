@@ -201,6 +201,8 @@ impl Compiler {
             self.stmt_break();
         } else if self.matches(Token::Continue) {
             self.stmt_continue();
+        } else if self.matches(Token::Return) {
+            self.stmt_return();
         } else if self.matches(Token::Lbrace) {
             self.stmt_block();
         } else {
@@ -212,6 +214,20 @@ impl Compiler {
         self.scope_begin();
         self.block();
         self.scope_end();
+    }
+
+    fn stmt_return(&mut self) {
+        if self.ctx().fn_kind == FnKind::Script {
+            self.error("can't return from top-level code");
+        }
+
+        if self.matches(Token::Semi) {
+            self.emit_return();
+        } else {
+            self.expression();
+            self.consume(Token::Semi, "expect ';' after return value");
+            self.emit(OpCode::Return);
+        }
     }
 
     fn stmt_break(&mut self) {
@@ -386,6 +402,15 @@ impl Compiler {
         self.scope_begin();
 
         self.consume(Token::Lparen, "expect '(' after function name");
+        self.parameter_list();
+        self.consume(Token::Lbrace, "expect '{' before function body");
+        self.block();
+
+        let fn_obj = self.ctx_end();
+        self.emit_constant(Value::Fun(Rc::new(fn_obj)));
+    }
+
+    fn parameter_list(&mut self) {
         if !self.check(Token::Rparen) {
             loop {
                 let ctx = self.ctx_mut();
@@ -401,11 +426,24 @@ impl Compiler {
             }
         }
         self.consume(Token::Rparen, "expect ')' after parameters");
-        self.consume(Token::Lbrace, "expect '{' before function body");
-        self.block();
+    }
 
-        let fn_obj = self.ctx_end();
-        self.emit_constant(Value::Fun(Rc::new(fn_obj)));
+    fn argument_list(&mut self) -> usize {
+        let mut arg_count = 0;
+        if !self.check(Token::Rparen) {
+            loop {
+                self.expression();
+                if arg_count == 255 {
+                    self.error("can't have more than 255 arguments");
+                }
+                arg_count += 1;
+                if !self.matches(Token::Comma) {
+                    break;
+                }
+            }
+        }
+        self.consume(Token::Rparen, "expect ')' after arguments");
+        arg_count
     }
 
     fn block(&mut self) {
@@ -498,6 +536,12 @@ impl Compiler {
             Token::Not => self.emit(OpCode::Not),
             _ => unreachable!(),
         }
+    }
+
+    fn call(&mut self, _assignable: bool) {
+        let arg_count = self.argument_list();
+        self.emit(OpCode::Call);
+        self.emit_byte(arg_count as u8);
     }
 
     fn grouping(&mut self, _assignable: bool) {
@@ -639,6 +683,7 @@ impl Compiler {
     }
 
     fn emit_return(&mut self) {
+        self.emit(OpCode::None);
         self.emit(OpCode::Return);
     }
 
@@ -754,6 +799,7 @@ impl Compiler {
 
     fn op_infix(&self, token: Token) -> Option<Box<ParseFn>> {
         Some(Box::new(match token {
+            Token::Lparen => Compiler::call,
             Token::Plus => Compiler::binary,
             Token::Minus => Compiler::binary,
             Token::Star => Compiler::binary,
@@ -773,6 +819,7 @@ impl Compiler {
 
     fn op_prec(&self, token: Token) -> Prec {
         match token {
+            Token::Lparen => Prec::Call,
             Token::Plus => Prec::Term,
             Token::Minus => Prec::Term,
             Token::Star => Prec::Factor,

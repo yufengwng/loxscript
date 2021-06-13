@@ -8,6 +8,8 @@ use crate::debug;
 use crate::value::ObjFn;
 use crate::value::Value;
 
+const FRAMES_MAX: usize = 64;
+
 pub enum InterpretResult {
     Ok,
     CompileErr,
@@ -18,6 +20,24 @@ pub struct VM {
     stack: Vec<Value>,
     frames: Vec<CallFrame>,
     globals: HashMap<String, Value>,
+    curr_frame: usize,
+}
+
+macro_rules! runtime_err {
+    ( $self:ident, $($args:tt)+ ) => ({
+        eprintln!($($args)*);
+        for i in (0..$self.frames.len()).rev() {
+            let frame = &$self.frames[i];
+            let fn_obj = &frame.function;
+            eprint!("[line {}] in ", frame.prev_line());
+            if fn_obj.name.is_empty() {
+                eprintln!("script");
+            } else {
+                eprintln!("{}()", &fn_obj.name);
+            }
+        }
+        $self.stack_reset();
+    });
 }
 
 impl VM {
@@ -26,6 +46,7 @@ impl VM {
             stack: Vec::new(),
             frames: Vec::new(),
             globals: HashMap::new(),
+            curr_frame: 0,
         }
     }
 
@@ -36,30 +57,20 @@ impl VM {
         };
 
         self.stack_push(Value::Fun(fn_rc.clone()));
+        self.call(fn_rc, 0);
 
-        let mut frame = CallFrame::new(fn_rc);
-        frame.base_slot = self.stack.len();
-        self.frames.push(frame);
-
-        self.run()
+        let result = self.run();
+        self.stack_print();
+        result
     }
 
     fn run(&mut self) -> InterpretResult {
         use OpCode::*;
-        let mut frame = self.frames.pop().unwrap();
 
         macro_rules! expand {
             ( $e:expr ) => {{
                 $e
             }};
-        }
-
-        macro_rules! runtime_err {
-            ( $($args:tt)+ ) => ({
-                println!($($args)*);
-                println!("[line {}] in script", frame.curr_line());
-                self.stack_reset();
-            });
         }
 
         macro_rules! bin_add {
@@ -78,7 +89,7 @@ impl VM {
                     let lhs = self.stack_pop().into_num();
                     self.stack_push(Value::Num(lhs + rhs));
                 } else {
-                    runtime_err!("operands must be two numbers or two strings");
+                    runtime_err!(self, "operands must be two numbers or two strings");
                     return InterpretResult::RuntimeErr;
                 }
             }};
@@ -93,7 +104,7 @@ impl VM {
                     let lhs = self.stack_pop().into_num();
                     self.stack_push($ctor(expand!(lhs $op rhs)));
                 } else {
-                    runtime_err!("operands must be numbers");
+                    runtime_err!(self, "operands must be numbers");
                     return InterpretResult::RuntimeErr;
                 }
             });
@@ -112,7 +123,7 @@ impl VM {
                     }
                     self.stack_push(Value::Num(expand!(lhs $op rhs)));
                 } else {
-                    runtime_err!("operands must be numbers");
+                    runtime_err!(self, "operands must be numbers");
                     return InterpretResult::RuntimeErr;
                 }
             });
@@ -124,7 +135,7 @@ impl VM {
                     let num = self.stack_pop().into_num();
                     self.stack_push(Value::Num(-num));
                 } else {
-                    runtime_err!("operand must be a number");
+                    runtime_err!(self, "operand must be a number");
                     return InterpretResult::RuntimeErr;
                 }
             }};
@@ -147,8 +158,8 @@ impl VM {
 
         loop {
             self.stack_print();
-            debug::disassemble_at(&frame.function.chunk, frame.ip);
-            let byte = frame.read_byte();
+            debug::disassemble_at(&self.frame().function.chunk, self.frame().ip);
+            let byte = self.frame_mut().read_byte();
             let opcode = match OpCode::try_from(byte) {
                 Ok(op) => op,
                 Err(_) => {
@@ -157,27 +168,27 @@ impl VM {
                 }
             };
             match opcode {
-                Constant => self.load_const(&mut frame),
-                ConstantLong => self.load_const_long(&mut frame),
+                Constant => self.load_const(),
+                ConstantLong => self.load_const_long(),
                 DefineGlobal => {
-                    let name = frame.read_constant().clone().into_str();
+                    let name = self.frame_mut().read_constant().clone().into_str();
                     let value = self.stack_pop();
                     self.globals.insert(name, value);
                 }
                 GetGlobal => {
-                    let name = frame.read_constant().clone().into_str();
+                    let name = self.frame_mut().read_constant().clone().into_str();
                     let entry = self.globals.get(&name);
                     if entry.is_none() {
-                        runtime_err!("undefined variable '{}'", name);
+                        runtime_err!(self, "undefined variable '{}'", name);
                         return InterpretResult::RuntimeErr;
                     }
                     let value = entry.unwrap().clone();
                     self.stack_push(value);
                 }
                 SetGlobal => {
-                    let name = frame.read_constant().clone().into_str();
+                    let name = self.frame_mut().read_constant().clone().into_str();
                     if !self.globals.contains_key(&name) {
-                        runtime_err!("undefined variable '{}'", name);
+                        runtime_err!(self, "undefined variable '{}'", name);
                         return InterpretResult::RuntimeErr;
                     }
                     let value = self.stack_pop();
@@ -185,14 +196,14 @@ impl VM {
                     self.globals.insert(name, value);
                 }
                 GetLocal => {
-                    let mut slot = frame.read_byte() as usize;
-                    slot += frame.base_slot;
+                    let mut slot = self.frame_mut().read_byte() as usize;
+                    slot += self.frame().base_slot;
                     let local = self.stack[slot].clone();
                     self.stack_push(local);
                 }
                 SetLocal => {
-                    let mut slot = frame.read_byte() as usize;
-                    slot += frame.base_slot;
+                    let mut slot = self.frame_mut().read_byte() as usize;
+                    slot += self.frame().base_slot;
                     let value = self.stack_pop();
                     self.stack_push(Value::None);
                     self.stack[slot] = value;
@@ -217,27 +228,57 @@ impl VM {
                     self.stack_pop();
                 }
                 Loop => {
+                    let mut frame = self.frame_mut();
                     let offset = frame.read_short() as usize;
                     frame.ip -= offset;
                 }
                 Jump => {
+                    let mut frame = self.frame_mut();
                     let amount = frame.read_short() as usize;
                     frame.ip += amount;
                 }
                 JumpIfFalse => {
-                    let amount = frame.read_short() as usize;
+                    let amount = self.frame_mut().read_short() as usize;
                     if self.stack_peek(0).is_falsey() {
+                        let mut frame = self.frame_mut();
                         frame.ip += amount;
                     }
                 }
+                Call => {
+                    let arg_count = self.frame_mut().read_byte() as usize;
+                    let value = self.stack_peek(arg_count).clone();
+                    if !self.call_value(value, arg_count) {
+                        return InterpretResult::RuntimeErr;
+                    }
+                    self.curr_frame += 1;
+                }
                 Return => {
                     let value = self.stack_pop();
-                    value.print();
-                    println!();
-                    return InterpretResult::Ok;
+                    self.frame_pop();
+                    if self.frames.is_empty() {
+                        return InterpretResult::Ok;
+                    }
+                    self.curr_frame -= 1;
+                    self.stack_push(value);
                 }
             }
         }
+    }
+
+    fn frame(&self) -> &CallFrame {
+        &self.frames[self.curr_frame]
+    }
+
+    fn frame_mut(&mut self) -> &mut CallFrame {
+        &mut self.frames[self.curr_frame]
+    }
+
+    fn frame_pop(&mut self) {
+        let frame = self.frames.pop().unwrap();
+        for _ in 0..frame.function.arity {
+            self.stack_pop();
+        }
+        self.stack_pop();
     }
 
     fn stack_print(&self) {
@@ -246,6 +287,9 @@ impl VM {
             print!("[ ");
             value.print();
             print!(" ]");
+        }
+        if self.stack.is_empty() {
+            print!("[ ]");
         }
         println!();
     }
@@ -266,14 +310,40 @@ impl VM {
         self.stack.clear();
     }
 
-    fn load_const(&mut self, frame: &mut CallFrame) {
-        let value = frame.read_constant();
-        self.stack_push(value.clone());
+    fn load_const(&mut self) {
+        let value = self.frame_mut().read_constant().clone();
+        self.stack_push(value);
     }
 
-    fn load_const_long(&mut self, frame: &mut CallFrame) {
-        let value = frame.read_constant_long();
-        self.stack_push(value.clone());
+    fn load_const_long(&mut self) {
+        let value = self.frame_mut().read_constant_long().clone();
+        self.stack_push(value);
+    }
+
+    fn call_value(&mut self, value: Value, arg_count: usize) -> bool {
+        match value {
+            Value::Fun(_) => {
+                self.call(value.into_fn(), arg_count)
+            }
+            _ => {
+                runtime_err!(self, "can only call functions and classes");
+                false
+            }
+        }
+    }
+
+    fn call(&mut self, fn_obj: Rc<ObjFn>, arg_count: usize) -> bool {
+        if arg_count != fn_obj.arity {
+            runtime_err!(self, "expected {} arguments but got {}", fn_obj.arity, arg_count);
+            return false;
+        } else if self.frames.len() == FRAMES_MAX {
+            runtime_err!(self, "stack overflow");
+            return false;
+        }
+        let mut frame = CallFrame::new(fn_obj);
+        frame.base_slot = self.stack.len() - arg_count - 1;
+        self.frames.push(frame);
+        true
     }
 }
 
@@ -292,8 +362,8 @@ impl CallFrame {
         }
     }
 
-    fn curr_line(&self) -> usize {
-        self.function.chunk.line(self.ip)
+    fn prev_line(&self) -> usize {
+        self.function.chunk.line(self.ip - 1)
     }
 
     fn read_byte(&mut self) -> u8 {

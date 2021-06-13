@@ -61,6 +61,13 @@ impl Value {
         }
     }
 
+    pub fn into_fn(self) -> Rc<ObjFn> {
+        match self {
+            Self::Fun(rc) => rc,
+            _ => panic!(),
+        }
+    }
+
     pub fn print(&self) {
         match self {
             Value::None => print!("none"),

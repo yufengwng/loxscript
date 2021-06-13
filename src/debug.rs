@@ -55,6 +55,7 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
         Loop => jump_instruction("OP_LOOP", false, chunk, offset),
         Jump => jump_instruction("OP_JUMP", true, chunk, offset),
         JumpIfFalse => jump_instruction("OP_JUMP_IF_FALSE", true, chunk, offset),
+        Call => byte_instruction("OP_CALL", chunk, offset),
         Return => simple_instruction("OP_RETURN", offset),
     };
 }
