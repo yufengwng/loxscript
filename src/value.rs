@@ -9,6 +9,7 @@ pub enum Value {
     Num(f64),
     Str(String),
     Fun(Rc<ObjFn>),
+    Native(Rc<ObjNative>),
 }
 
 pub struct ObjFn {
@@ -17,14 +18,22 @@ pub struct ObjFn {
     pub chunk: Chunk,
 }
 
+pub type NativeFn = fn(Vec<Value>) -> Value;
+
+pub struct ObjNative {
+    pub function: NativeFn,
+    pub arity: usize,
+}
+
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Value::None, Value::None) => true,
-            (Value::Bool(a), Value::Bool(b)) => a == b,
-            (Value::Num(n), Value::Num(m)) => n == m,
-            (Value::Str(s), Value::Str(t)) => s == t,
-            (Value::Fun(f), Value::Fun(g)) => Rc::ptr_eq(f, g),
+            (Self::None, Self::None) => true,
+            (Self::Bool(a), Self::Bool(b)) => a == b,
+            (Self::Num(n), Self::Num(m)) => n == m,
+            (Self::Str(s), Self::Str(t)) => s == t,
+            (Self::Fun(f), Self::Fun(g)) => Rc::ptr_eq(f, g),
+            (Self::Native(f), Self::Native(g)) => Rc::ptr_eq(f, g),
             _ => false,
         }
     }
@@ -33,8 +42,8 @@ impl PartialEq for Value {
 impl Value {
     pub fn is_falsey(&self) -> bool {
         match self {
-            Value::None => true,
-            Value::Bool(b) => !b,
+            Self::None => true,
+            Self::Bool(b) => !b,
             _ => false,
         }
     }
@@ -68,13 +77,21 @@ impl Value {
         }
     }
 
+    pub fn into_native(self) -> Rc<ObjNative> {
+        match self {
+            Self::Native(rc) => rc,
+            _ => panic!(),
+        }
+    }
+
     pub fn print(&self) {
         match self {
-            Value::None => print!("none"),
-            Value::Bool(b) => print!("{}", b),
-            Value::Num(n) => print!("{}", n),
-            Value::Str(s) => print!("{}", s),
-            Value::Fun(f) => f.print(),
+            Self::None => print!("none"),
+            Self::Bool(b) => print!("{}", b),
+            Self::Num(n) => print!("{}", n),
+            Self::Str(s) => print!("{}", s),
+            Self::Fun(f) => f.print(),
+            Self::Native(f) => f.print(),
         }
     }
 }
@@ -94,5 +111,15 @@ impl ObjFn {
         } else {
             print!("<fn {}>", self.name);
         }
+    }
+}
+
+impl ObjNative {
+    pub fn new(function: NativeFn, arity: usize) -> Self {
+        Self { function, arity }
+    }
+
+    pub fn print(&self) {
+        print!("<native fn>");
     }
 }

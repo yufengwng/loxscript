@@ -739,7 +739,9 @@ impl Compiler {
             } else {
                 "<script>".to_owned()
             };
-            debug::disassemble(&fn_obj.chunk, &name);
+            if cfg!(feature = "debug") {
+                debug::disassemble(&fn_obj.chunk, &name);
+            }
         }
         fn_obj
     }
@@ -838,7 +840,7 @@ impl Compiler {
     }
 }
 
-type ParseFn = dyn FnMut(&mut Compiler, bool) -> ();
+type ParseFn = fn(&mut Compiler, bool) -> ();
 
 #[repr(u8)]
 #[derive(Copy, Clone)]

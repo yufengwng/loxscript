@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::rc::Rc;
+use std::time::SystemTime;
 
 use crate::bytecode::OpCode;
 use crate::compile;
 use crate::debug;
+use crate::value::NativeFn;
 use crate::value::ObjFn;
+use crate::value::ObjNative;
 use crate::value::Value;
 
 const FRAMES_MAX: usize = 64;
@@ -20,7 +23,6 @@ pub struct VM {
     stack: Vec<Value>,
     frames: Vec<CallFrame>,
     globals: HashMap<String, Value>,
-    curr_frame: usize,
 }
 
 macro_rules! runtime_err {
@@ -42,12 +44,14 @@ macro_rules! runtime_err {
 
 impl VM {
     pub fn new() -> Self {
-        Self {
+        let mut this = Self {
             stack: Vec::new(),
             frames: Vec::new(),
             globals: HashMap::new(),
-            curr_frame: 0,
-        }
+        };
+        this.define_native("print", native_print, 1);
+        this.define_native("clock", native_clock, 0);
+        this
     }
 
     pub fn interpret(&mut self, source: String) -> InterpretResult {
@@ -158,7 +162,9 @@ impl VM {
 
         loop {
             self.stack_print();
-            debug::disassemble_at(&self.frame().function.chunk, self.frame().ip);
+            if cfg!(feature = "debug") {
+                debug::disassemble_at(&self.frame().function.chunk, self.frame().ip);
+            }
             let byte = self.frame_mut().read_byte();
             let opcode = match OpCode::try_from(byte) {
                 Ok(op) => op,
@@ -250,7 +256,6 @@ impl VM {
                     if !self.call_value(value, arg_count) {
                         return InterpretResult::RuntimeErr;
                     }
-                    self.curr_frame += 1;
                 }
                 Return => {
                     let value = self.stack_pop();
@@ -258,40 +263,25 @@ impl VM {
                     if self.frames.is_empty() {
                         return InterpretResult::Ok;
                     }
-                    self.curr_frame -= 1;
                     self.stack_push(value);
                 }
             }
         }
     }
 
-    fn frame(&self) -> &CallFrame {
-        &self.frames[self.curr_frame]
-    }
-
-    fn frame_mut(&mut self) -> &mut CallFrame {
-        &mut self.frames[self.curr_frame]
-    }
-
-    fn frame_pop(&mut self) {
-        let frame = self.frames.pop().unwrap();
-        for _ in 0..frame.function.arity {
-            self.stack_pop();
-        }
-        self.stack_pop();
-    }
-
     fn stack_print(&self) {
-        print!("        ");
-        for value in self.stack.iter() {
-            print!("[ ");
-            value.print();
-            print!(" ]");
+        if cfg!(feature = "debug") {
+            print!("        ");
+            for value in self.stack.iter() {
+                print!("[ ");
+                value.print();
+                print!(" ]");
+            }
+            if self.stack.is_empty() {
+                print!("[ ]");
+            }
+            println!();
         }
-        if self.stack.is_empty() {
-            print!("[ ]");
-        }
-        println!();
     }
 
     fn stack_peek(&mut self, distance: usize) -> &Value {
@@ -320,11 +310,32 @@ impl VM {
         self.stack_push(value);
     }
 
+    fn frame(&self) -> &CallFrame {
+        self.frames.last().unwrap()
+    }
+
+    fn frame_mut(&mut self) -> &mut CallFrame {
+        self.frames.last_mut().unwrap()
+    }
+
+    fn frame_pop(&mut self) {
+        let frame = self.frames.pop().unwrap();
+        for _ in 0..frame.function.arity {
+            self.stack_pop();
+        }
+        self.stack_pop();
+    }
+
+    fn define_native(&mut self, name: &str, function: NativeFn, arity: usize) {
+        let native = ObjNative::new(function, arity);
+        let value = Value::Native(Rc::new(native));
+        self.globals.insert(name.to_owned(), value);
+    }
+
     fn call_value(&mut self, value: Value, arg_count: usize) -> bool {
         match value {
-            Value::Fun(_) => {
-                self.call(value.into_fn(), arg_count)
-            }
+            Value::Fun(_) => self.call(value.into_fn(), arg_count),
+            Value::Native(_) => self.call_native(value.into_native(), arg_count),
             _ => {
                 runtime_err!(self, "can only call functions and classes");
                 false
@@ -332,9 +343,34 @@ impl VM {
         }
     }
 
+    fn call_native(&mut self, native: Rc<ObjNative>, arg_count: usize) -> bool {
+        if arg_count != native.arity {
+            runtime_err!(
+                self,
+                "expected {} arguments but got {}",
+                native.arity,
+                arg_count
+            );
+            return false;
+        }
+
+        let start = self.stack.len() - arg_count;
+        let args = self.stack.split_off(start);
+        let result = (native.function)(args);
+
+        self.stack_pop();
+        self.stack_push(result);
+        true
+    }
+
     fn call(&mut self, fn_obj: Rc<ObjFn>, arg_count: usize) -> bool {
         if arg_count != fn_obj.arity {
-            runtime_err!(self, "expected {} arguments but got {}", fn_obj.arity, arg_count);
+            runtime_err!(
+                self,
+                "expected {} arguments but got {}",
+                fn_obj.arity,
+                arg_count
+            );
             return false;
         } else if self.frames.len() == FRAMES_MAX {
             runtime_err!(self, "stack overflow");
@@ -391,4 +427,18 @@ impl CallFrame {
         let index = (byte3 << 16) | (byte2 << 8) | byte1;
         self.function.chunk.constant(index)
     }
+}
+
+fn native_print(args: Vec<Value>) -> Value {
+    args[0].print();
+    println!();
+    Value::None
+}
+
+fn native_clock(_args: Vec<Value>) -> Value {
+    let seconds = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    Value::Num(seconds as f64)
 }
