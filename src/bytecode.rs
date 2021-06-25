@@ -33,6 +33,7 @@ pub enum OpCode {
     Jump,
     JumpIfFalse,
     Call,
+    Closure,
     Return,
 }
 
@@ -70,6 +71,7 @@ impl TryFrom<u8> for OpCode {
             b if b == Jump as u8 => Jump,
             b if b == JumpIfFalse as u8 => JumpIfFalse,
             b if b == Call as u8 => Call,
+            b if b == Closure as u8 => Closure,
             b if b == Return as u8 => Return,
             _ => return Err(()),
         })

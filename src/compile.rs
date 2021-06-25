@@ -407,7 +407,9 @@ impl Compiler {
         self.block();
 
         let fn_obj = self.ctx_end();
-        self.emit_constant(Value::Fun(Rc::new(fn_obj)));
+        let index = self.make_constant(Value::Fun(Rc::new(fn_obj)));
+        self.emit(OpCode::Closure);
+        self.emit_byte(index as u8);
     }
 
     fn parameter_list(&mut self) {

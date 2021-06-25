@@ -7,7 +7,7 @@ use crate::bytecode::OpCode;
 use crate::compile;
 use crate::debug;
 use crate::value::NativeFn;
-use crate::value::ObjFn;
+use crate::value::ObjClosure;
 use crate::value::ObjNative;
 use crate::value::Value;
 
@@ -30,7 +30,7 @@ macro_rules! runtime_err {
         eprintln!($($args)*);
         for i in (0..$self.frames.len()).rev() {
             let frame = &$self.frames[i];
-            let fn_obj = &frame.function;
+            let fn_obj = &frame.closure.function;
             eprint!("[line {}] in ", frame.prev_line());
             if fn_obj.name.is_empty() {
                 eprintln!("script");
@@ -61,7 +61,7 @@ impl VM {
         };
 
         self.stack_push(Value::Fun(fn_rc.clone()));
-        self.call(fn_rc, 0);
+        self.call(Rc::new(ObjClosure::new(fn_rc)), 0);
 
         let result = self.run();
         self.stack_print();
@@ -163,7 +163,7 @@ impl VM {
         loop {
             self.stack_print();
             if cfg!(feature = "debug") {
-                debug::disassemble_at(&self.frame().function.chunk, self.frame().ip);
+                debug::disassemble_at(&self.frame().closure.function.chunk, self.frame().ip);
             }
             let byte = self.frame_mut().read_byte();
             let opcode = match OpCode::try_from(byte) {
@@ -257,6 +257,11 @@ impl VM {
                         return InterpretResult::RuntimeErr;
                     }
                 }
+                Closure => {
+                    let function = self.frame_mut().read_constant().clone().into_fn();
+                    let closure = ObjClosure::new(function);
+                    self.stack_push(Value::Closure(Rc::new(closure)));
+                }
                 Return => {
                     let value = self.stack_pop();
                     self.frame_pop();
@@ -320,7 +325,7 @@ impl VM {
 
     fn frame_pop(&mut self) {
         let frame = self.frames.pop().unwrap();
-        for _ in 0..frame.function.arity {
+        for _ in 0..frame.closure.function.arity {
             self.stack_pop();
         }
         self.stack_pop();
@@ -334,7 +339,7 @@ impl VM {
 
     fn call_value(&mut self, value: Value, arg_count: usize) -> bool {
         match value {
-            Value::Fun(_) => self.call(value.into_fn(), arg_count),
+            Value::Closure(_) => self.call(value.into_closure(), arg_count),
             Value::Native(_) => self.call_native(value.into_native(), arg_count),
             _ => {
                 runtime_err!(self, "can only call functions and classes");
@@ -363,12 +368,12 @@ impl VM {
         true
     }
 
-    fn call(&mut self, fn_obj: Rc<ObjFn>, arg_count: usize) -> bool {
-        if arg_count != fn_obj.arity {
+    fn call(&mut self, closure: Rc<ObjClosure>, arg_count: usize) -> bool {
+        if arg_count != closure.function.arity {
             runtime_err!(
                 self,
                 "expected {} arguments but got {}",
-                fn_obj.arity,
+                closure.function.arity,
                 arg_count
             );
             return false;
@@ -376,7 +381,7 @@ impl VM {
             runtime_err!(self, "stack overflow");
             return false;
         }
-        let mut frame = CallFrame::new(fn_obj);
+        let mut frame = CallFrame::new(closure);
         frame.base_slot = self.stack.len() - arg_count - 1;
         self.frames.push(frame);
         true
@@ -384,40 +389,40 @@ impl VM {
 }
 
 struct CallFrame {
-    function: Rc<ObjFn>,
+    closure: Rc<ObjClosure>,
     base_slot: usize,
     ip: usize,
 }
 
 impl CallFrame {
-    fn new(fn_obj: Rc<ObjFn>) -> Self {
+    fn new(closure: Rc<ObjClosure>) -> Self {
         Self {
-            function: fn_obj,
+            closure,
             base_slot: 0,
             ip: 0,
         }
     }
 
     fn prev_line(&self) -> usize {
-        self.function.chunk.line(self.ip - 1)
+        self.closure.function.chunk.line(self.ip - 1)
     }
 
     fn read_byte(&mut self) -> u8 {
-        let byte = self.function.chunk.code(self.ip);
+        let byte = self.closure.function.chunk.code(self.ip);
         self.ip += 1;
         byte
     }
 
     fn read_short(&mut self) -> u16 {
-        let byte1 = self.function.chunk.code(self.ip) as u16;
-        let byte2 = self.function.chunk.code(self.ip + 1) as u16;
+        let byte1 = self.closure.function.chunk.code(self.ip) as u16;
+        let byte2 = self.closure.function.chunk.code(self.ip + 1) as u16;
         self.ip += 2;
         (byte2 << 8) | byte1
     }
 
     fn read_constant(&mut self) -> &Value {
         let index = self.read_byte() as usize;
-        self.function.chunk.constant(index)
+        self.closure.function.chunk.constant(index)
     }
 
     fn read_constant_long(&mut self) -> &Value {
@@ -425,7 +430,7 @@ impl CallFrame {
         let byte2 = self.read_byte() as usize;
         let byte3 = self.read_byte() as usize;
         let index = (byte3 << 16) | (byte2 << 8) | byte1;
-        self.function.chunk.constant(index)
+        self.closure.function.chunk.constant(index)
     }
 }
 

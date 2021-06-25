@@ -56,6 +56,7 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
         Jump => jump_instruction("OP_JUMP", true, chunk, offset),
         JumpIfFalse => jump_instruction("OP_JUMP_IF_FALSE", true, chunk, offset),
         Call => byte_instruction("OP_CALL", chunk, offset),
+        Closure => closure_instruction("OP_CLOSURE", chunk, offset),
         Return => simple_instruction("OP_RETURN", offset),
     };
 }
@@ -84,6 +85,14 @@ fn jump_instruction(name: &str, positive: bool, chunk: &Chunk, offset: usize) ->
     let dest = (offset as isize) + 3 + jump;
     println!("{:<16} {:4} -> {}", name, offset, dest);
     return offset + 3;
+}
+
+fn closure_instruction(name: &str, chunk: &Chunk, offset: usize) -> usize {
+    let idx = chunk.code(offset + 1) as usize;
+    print!("{:<16} {:4} ", name, idx);
+    chunk.constant(idx).print();
+    println!();
+    offset + 2
 }
 
 fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {

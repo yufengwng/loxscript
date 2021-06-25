@@ -10,19 +10,7 @@ pub enum Value {
     Str(String),
     Fun(Rc<ObjFn>),
     Native(Rc<ObjNative>),
-}
-
-pub struct ObjFn {
-    pub name: String,
-    pub arity: usize,
-    pub chunk: Chunk,
-}
-
-pub type NativeFn = fn(Vec<Value>) -> Value;
-
-pub struct ObjNative {
-    pub function: NativeFn,
-    pub arity: usize,
+    Closure(Rc<ObjClosure>),
 }
 
 impl PartialEq for Value {
@@ -34,6 +22,7 @@ impl PartialEq for Value {
             (Self::Str(s), Self::Str(t)) => s == t,
             (Self::Fun(f), Self::Fun(g)) => Rc::ptr_eq(f, g),
             (Self::Native(f), Self::Native(g)) => Rc::ptr_eq(f, g),
+            (Self::Closure(f), Self::Closure(g)) => Rc::ptr_eq(f, g),
             _ => false,
         }
     }
@@ -84,6 +73,13 @@ impl Value {
         }
     }
 
+    pub fn into_closure(self) -> Rc<ObjClosure> {
+        match self {
+            Self::Closure(rc) => rc,
+            _ => panic!(),
+        }
+    }
+
     pub fn print(&self) {
         match self {
             Self::None => print!("none"),
@@ -92,8 +88,15 @@ impl Value {
             Self::Str(s) => print!("{}", s),
             Self::Fun(f) => f.print(),
             Self::Native(f) => f.print(),
+            Self::Closure(f) => f.print(),
         }
     }
+}
+
+pub struct ObjFn {
+    pub name: String,
+    pub arity: usize,
+    pub chunk: Chunk,
 }
 
 impl ObjFn {
@@ -114,6 +117,13 @@ impl ObjFn {
     }
 }
 
+pub type NativeFn = fn(Vec<Value>) -> Value;
+
+pub struct ObjNative {
+    pub function: NativeFn,
+    pub arity: usize,
+}
+
 impl ObjNative {
     pub fn new(function: NativeFn, arity: usize) -> Self {
         Self { function, arity }
@@ -121,5 +131,19 @@ impl ObjNative {
 
     pub fn print(&self) {
         print!("<native fn>");
+    }
+}
+
+pub struct ObjClosure {
+    pub function: Rc<ObjFn>,
+}
+
+impl ObjClosure {
+    pub fn new(function: Rc<ObjFn>) -> Self {
+        Self { function }
+    }
+
+    pub fn print(&self) {
+        self.function.print();
     }
 }
