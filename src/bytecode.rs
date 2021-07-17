@@ -12,6 +12,8 @@ pub enum OpCode {
     SetGlobal,
     GetLocal,
     SetLocal,
+    GetUpvalue,
+    SetUpvalue,
     None,
     True,
     False,
@@ -34,6 +36,7 @@ pub enum OpCode {
     JumpIfFalse,
     Call,
     Closure,
+    CloseUpvalue,
     Return,
 }
 
@@ -50,6 +53,8 @@ impl TryFrom<u8> for OpCode {
             b if b == SetGlobal as u8 => SetGlobal,
             b if b == GetLocal as u8 => GetLocal,
             b if b == SetLocal as u8 => SetLocal,
+            b if b == GetUpvalue as u8 => GetUpvalue,
+            b if b == SetUpvalue as u8 => SetUpvalue,
             b if b == None as u8 => None,
             b if b == True as u8 => True,
             b if b == False as u8 => False,
@@ -72,6 +77,7 @@ impl TryFrom<u8> for OpCode {
             b if b == JumpIfFalse as u8 => JumpIfFalse,
             b if b == Call as u8 => Call,
             b if b == Closure as u8 => Closure,
+            b if b == CloseUpvalue as u8 => CloseUpvalue,
             b if b == Return as u8 => Return,
             _ => return Err(()),
         })

@@ -9,6 +9,7 @@ use crate::debug;
 use crate::value::NativeFn;
 use crate::value::ObjClosure;
 use crate::value::ObjNative;
+use crate::value::ObjUpvalue;
 use crate::value::Value;
 
 const FRAMES_MAX: usize = 64;
@@ -23,6 +24,7 @@ pub struct VM {
     stack: Vec<Value>,
     frames: Vec<CallFrame>,
     globals: HashMap<String, Value>,
+    open_upvalues: Vec<Rc<ObjUpvalue>>,
 }
 
 macro_rules! runtime_err {
@@ -48,6 +50,7 @@ impl VM {
             stack: Vec::new(),
             frames: Vec::new(),
             globals: HashMap::new(),
+            open_upvalues: Vec::new(),
         };
         this.define_native("print", native_print, 1);
         this.define_native("clock", native_clock, 0);
@@ -63,6 +66,9 @@ impl VM {
         self.stack_push(Value::Fun(fn_rc.clone()));
         self.call(Rc::new(ObjClosure::new(fn_rc)), 0);
 
+        if cfg!(feature = "debug") {
+            println!("== <vm> ==");
+        }
         let result = self.run();
         self.stack_print();
         result
@@ -214,6 +220,26 @@ impl VM {
                     self.stack_push(Value::None);
                     self.stack[slot] = value;
                 }
+                GetUpvalue => {
+                    let slot = self.frame_mut().read_byte() as usize;
+                    let upvalue = &self.frame().closure.upvalues[slot];
+                    let value = if upvalue.is_closed() {
+                        upvalue.get_value()
+                    } else {
+                        self.stack[upvalue.location].clone()
+                    };
+                    self.stack_push(value);
+                }
+                SetUpvalue => {
+                    let slot = self.frame_mut().read_byte() as usize;
+                    let value = self.stack_peek(0).clone();
+                    let upvalue = self.frame().closure.upvalues[slot].clone();
+                    if upvalue.is_closed() {
+                        upvalue.set_value(value);
+                    } else {
+                        self.stack[upvalue.location] = value;
+                    }
+                }
                 None => self.stack_push(Value::None),
                 True => self.stack_push(Value::Bool(true)),
                 False => self.stack_push(Value::Bool(false)),
@@ -259,8 +285,23 @@ impl VM {
                 }
                 Closure => {
                     let function = self.frame_mut().read_constant().clone().into_fn();
-                    let closure = ObjClosure::new(function);
+                    let mut closure = ObjClosure::new(function);
+                    for _ in 0..closure.function.num_upvalues {
+                        let is_local = self.frame_mut().read_byte() == 1_u8;
+                        let index = self.frame_mut().read_byte() as usize;
+                        let upvalue = if is_local {
+                            let stack_idx = self.frame().base_slot + index;
+                            self.capture_upvalue(stack_idx)
+                        } else {
+                            self.frame().closure.upvalues[index].clone()
+                        };
+                        closure.upvalues.push(upvalue);
+                    }
                     self.stack_push(Value::Closure(Rc::new(closure)));
+                }
+                CloseUpvalue => {
+                    self.close_upvalues(self.stack.len() - 1);
+                    self.stack_pop();
                 }
                 Return => {
                     let value = self.stack_pop();
@@ -303,6 +344,7 @@ impl VM {
 
     fn stack_reset(&mut self) {
         self.stack.clear();
+        self.open_upvalues.clear();
     }
 
     fn load_const(&mut self) {
@@ -325,6 +367,7 @@ impl VM {
 
     fn frame_pop(&mut self) {
         let frame = self.frames.pop().unwrap();
+        self.close_upvalues(frame.base_slot);
         for _ in 0..frame.closure.function.arity {
             self.stack_pop();
         }
@@ -385,6 +428,43 @@ impl VM {
         frame.base_slot = self.stack.len() - arg_count - 1;
         self.frames.push(frame);
         true
+    }
+
+    fn capture_upvalue(&mut self, stack_idx: usize) -> Rc<ObjUpvalue> {
+        let mut slot = None;
+        for (i, upvalue) in self.open_upvalues.iter().enumerate().rev() {
+            if upvalue.location == stack_idx {
+                return upvalue.clone();
+            } else if upvalue.location < stack_idx {
+                slot = Some(i);
+                break;
+            }
+        }
+
+        let upvalue = Rc::new(ObjUpvalue::new(stack_idx));
+        if let Some(idx) = slot {
+            self.open_upvalues.insert(idx + 1, upvalue.clone());
+        } else {
+            self.open_upvalues.push(upvalue.clone());
+        }
+
+        upvalue
+    }
+
+    fn close_upvalues(&mut self, stack_idx: usize) {
+        let mut num = 0;
+        for upvalue in self.open_upvalues.iter().rev() {
+            if upvalue.location < stack_idx {
+                break;
+            }
+            num += 1;
+        }
+        for _ in 0..num {
+            let upvalue = self.open_upvalues.pop().unwrap();
+            let stack_idx = upvalue.location;
+            let value = self.stack[stack_idx].clone();
+            upvalue.close(value);
+        }
     }
 }
 

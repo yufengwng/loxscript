@@ -42,7 +42,7 @@ impl Compiler {
         while !self.matches(Token::EOF) {
             self.declaration();
         }
-        let fn_obj = self.ctx_end();
+        let fn_obj = self.ctx_end().function;
         if !self.had_error {
             Some(fn_obj)
         } else {
@@ -406,10 +406,15 @@ impl Compiler {
         self.consume(Token::Lbrace, "expect '{' before function body");
         self.block();
 
-        let fn_obj = self.ctx_end();
-        let index = self.make_constant(Value::Fun(Rc::new(fn_obj)));
+        let ctx = self.ctx_end();
+        let index = self.make_constant(Value::Fun(Rc::new(ctx.function)));
         self.emit(OpCode::Closure);
         self.emit_byte(index as u8);
+
+        for upvalue in ctx.upvalues {
+            self.emit_byte(if upvalue.is_local { 1_u8 } else { 0_u8 });
+            self.emit_byte(upvalue.index as u8);
+        }
     }
 
     fn parameter_list(&mut self) {
@@ -591,14 +596,14 @@ impl Compiler {
     }
 
     fn named_variable(&mut self, name: String, assignable: bool) {
-        let (idx, get_op, set_op) = if let Some(arg) = self.resolve_local(&name) {
+        let ctx_idx = self.contexts.len() - 1;
+        let (idx, get_op, set_op) = if let Some(arg) = self.resolve_local(ctx_idx, &name) {
             (arg, OpCode::GetLocal, OpCode::SetLocal)
+        } else if let Some(arg) = self.resolve_upvalue(ctx_idx, &name) {
+            (arg, OpCode::GetUpvalue, OpCode::SetUpvalue)
         } else {
-            (
-                self.make_ident_constant(name),
-                OpCode::GetGlobal,
-                OpCode::SetGlobal,
-            )
+            let arg = self.make_ident_constant(name);
+            (arg, OpCode::GetGlobal, OpCode::SetGlobal)
         };
 
         if assignable && self.matches(Token::Eq) {
@@ -642,6 +647,10 @@ impl Compiler {
         self.emit_byte(global as u8);
     }
 
+    fn initialize_local(&mut self) {
+        self.ctx_mut().locals.last_mut().unwrap().initialized = true;
+    }
+
     fn add_local(&mut self, name: String) {
         let ctx = self.ctx();
         if ctx.locals.len() > u8::MAX as usize {
@@ -652,12 +661,25 @@ impl Compiler {
         self.ctx_mut().locals.push(local);
     }
 
-    fn initialize_local(&mut self) {
-        self.ctx_mut().locals.last_mut().unwrap().initialized = true;
+    fn add_upvalue(&mut self, ctx_idx: usize, local_idx: usize, is_local: bool) -> usize {
+        let ctx = &mut self.contexts[ctx_idx];
+        let count = ctx.upvalues.len();
+        for (idx, upvalue) in ctx.upvalues.iter().enumerate() {
+            if upvalue.index == local_idx && upvalue.is_local == is_local {
+                return idx;
+            }
+        }
+        if count == (u8::MAX as usize + 1) {
+            self.error("too many closure variables in function");
+            return 0;
+        }
+        ctx.upvalues.push(Upvalue::new(local_idx, is_local));
+        count
     }
 
-    fn resolve_local(&mut self, name: &str) -> Option<usize> {
-        for (idx, local) in self.ctx().locals.iter().enumerate().rev() {
+    fn resolve_local(&mut self, ctx_idx: usize, name: &str) -> Option<usize> {
+        let ctx = &self.contexts[ctx_idx];
+        for (idx, local) in ctx.locals.iter().enumerate().rev() {
             if local.name == name {
                 if !local.initialized {
                     self.error("can't read local variable in its own initializer");
@@ -665,6 +687,25 @@ impl Compiler {
                 return Some(idx);
             }
         }
+        None
+    }
+
+    fn resolve_upvalue(&mut self, ctx_idx: usize, name: &str) -> Option<usize> {
+        if ctx_idx == 0 {
+            return None;
+        }
+
+        let local_idx = self.resolve_local(ctx_idx - 1, name);
+        if let Some(idx) = local_idx {
+            self.contexts[ctx_idx - 1].locals[idx].is_captured = true;
+            return Some(self.add_upvalue(ctx_idx, idx, true));
+        }
+
+        let upvalue = self.resolve_upvalue(ctx_idx - 1, name);
+        if let Some(idx) = upvalue {
+            return Some(self.add_upvalue(ctx_idx, idx, false));
+        }
+
         None
     }
 
@@ -731,10 +772,11 @@ impl Compiler {
         self.contexts.push(ctx);
     }
 
-    fn ctx_end(&mut self) -> ObjFn {
+    fn ctx_end(&mut self) -> Context {
         self.emit_return();
-        let ctx = self.contexts.pop().unwrap();
-        let fn_obj = ctx.function;
+        let mut ctx = self.contexts.pop().unwrap();
+        let mut fn_obj = &mut ctx.function;
+        fn_obj.num_upvalues = ctx.upvalues.len();
         if !self.had_error {
             let name = if !fn_obj.name.is_empty() {
                 fn_obj.name.to_owned()
@@ -745,7 +787,7 @@ impl Compiler {
                 debug::disassemble(&fn_obj.chunk, &name);
             }
         }
-        fn_obj
+        ctx
     }
 
     fn scope_begin(&mut self) {
@@ -756,19 +798,23 @@ impl Compiler {
         let ctx = self.ctx_mut();
         ctx.depth -= 1;
 
-        let mut num_pops = 0;
+        let mut opcodes = Vec::new();
         while !ctx.locals.is_empty() {
             let local_depth = ctx.locals.last().unwrap().depth;
             if local_depth > ctx.depth {
-                ctx.locals.pop();
-                num_pops += 1;
+                let local = ctx.locals.pop().unwrap();
+                opcodes.push(if local.is_captured {
+                    OpCode::CloseUpvalue
+                } else {
+                    OpCode::Pop
+                });
             } else {
                 break;
             }
         }
 
-        for _ in 0..num_pops {
-            self.emit(OpCode::Pop);
+        for opcode in opcodes {
+            self.emit(opcode);
         }
     }
 
@@ -892,6 +938,7 @@ struct Context {
     function: ObjFn,
     fn_kind: FnKind,
     locals: Vec<Local>,
+    upvalues: Vec<Upvalue>,
     loop_breaks: Vec<Vec<usize>>,
     loop_depths: Vec<usize>,
     loop_starts: Vec<usize>,
@@ -904,6 +951,7 @@ impl Context {
             function: ObjFn::new(),
             fn_kind: FnKind::Script,
             locals: Vec::new(),
+            upvalues: Vec::new(),
             loop_breaks: Vec::new(),
             loop_depths: Vec::new(),
             loop_starts: Vec::new(),
@@ -916,6 +964,7 @@ struct Local {
     name: String,
     depth: usize,
     initialized: bool,
+    is_captured: bool,
 }
 
 impl Local {
@@ -924,6 +973,18 @@ impl Local {
             name,
             depth,
             initialized: false,
+            is_captured: false,
         }
+    }
+}
+
+struct Upvalue {
+    index: usize,
+    is_local: bool,
+}
+
+impl Upvalue {
+    fn new(index: usize, is_local: bool) -> Self {
+        Self { index, is_local }
     }
 }

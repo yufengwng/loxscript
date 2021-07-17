@@ -35,6 +35,8 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
         SetGlobal => constant_instruction(opcode, chunk, offset),
         GetLocal => byte_instruction("OP_GET_LOCAL", chunk, offset),
         SetLocal => byte_instruction("OP_SET_LOCAL", chunk, offset),
+        GetUpvalue => byte_instruction("OP_GET_UPVALUE", chunk, offset),
+        SetUpvalue => byte_instruction("OP_SET_UPVALUE", chunk, offset),
         None => simple_instruction("OP_NONE", offset),
         True => simple_instruction("OP_TRUE", offset),
         False => simple_instruction("OP_FALSE", offset),
@@ -57,6 +59,7 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
         JumpIfFalse => jump_instruction("OP_JUMP_IF_FALSE", true, chunk, offset),
         Call => byte_instruction("OP_CALL", chunk, offset),
         Closure => closure_instruction("OP_CLOSURE", chunk, offset),
+        CloseUpvalue => simple_instruction("OP_CLOSE_UPVALUE", offset),
         Return => simple_instruction("OP_RETURN", offset),
     };
 }
@@ -88,11 +91,23 @@ fn jump_instruction(name: &str, positive: bool, chunk: &Chunk, offset: usize) ->
 }
 
 fn closure_instruction(name: &str, chunk: &Chunk, offset: usize) -> usize {
-    let idx = chunk.code(offset + 1) as usize;
+    let mut next = offset + 1;
+    let idx = chunk.code(next) as usize;
     print!("{:<16} {:4} ", name, idx);
     chunk.constant(idx).print();
     println!();
-    offset + 2
+    next += 1;
+
+    let fn_obj = chunk.constant(idx).clone().into_fn();
+    for _ in 0..fn_obj.num_upvalues {
+        let is_local = chunk.code(next) == 1_u8;
+        let index = chunk.code(next + 1);
+        let kind = if is_local { "local" } else { "upvalue" };
+        println!("{:04}    |                     {} {}", offset, kind, index);
+        next += 2;
+    }
+
+    next
 }
 
 fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {

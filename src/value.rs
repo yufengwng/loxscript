@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::bytecode::Chunk;
@@ -97,6 +98,7 @@ pub struct ObjFn {
     pub name: String,
     pub arity: usize,
     pub chunk: Chunk,
+    pub num_upvalues: usize,
 }
 
 impl ObjFn {
@@ -105,6 +107,7 @@ impl ObjFn {
             name: String::new(),
             arity: 0,
             chunk: Chunk::new(),
+            num_upvalues: 0,
         }
     }
 
@@ -136,14 +139,48 @@ impl ObjNative {
 
 pub struct ObjClosure {
     pub function: Rc<ObjFn>,
+    pub upvalues: Vec<Rc<ObjUpvalue>>,
 }
 
 impl ObjClosure {
     pub fn new(function: Rc<ObjFn>) -> Self {
-        Self { function }
+        Self {
+            function,
+            upvalues: Vec::new(),
+        }
     }
 
     pub fn print(&self) {
         self.function.print();
+    }
+}
+
+pub struct ObjUpvalue {
+    pub location: usize,
+    closed: RefCell<Option<Value>>,
+}
+
+impl ObjUpvalue {
+    pub fn new(location: usize) -> Self {
+        Self {
+            location,
+            closed: RefCell::new(None),
+        }
+    }
+
+    pub fn close(&self, value: Value) {
+        self.closed.replace(Some(value));
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.closed.borrow().is_some()
+    }
+
+    pub fn get_value(&self) -> Value {
+        self.closed.borrow().clone().unwrap()
+    }
+
+    pub fn set_value(&self, value: Value) {
+        self.close(value);
     }
 }
