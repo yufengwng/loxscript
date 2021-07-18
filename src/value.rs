@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::bytecode::Chunk;
@@ -12,6 +13,8 @@ pub enum Value {
     Fun(Rc<ObjFn>),
     Native(Rc<ObjNative>),
     Closure(Rc<ObjClosure>),
+    Class(Rc<ObjClass>),
+    Instance(Rc<ObjInstance>),
 }
 
 impl PartialEq for Value {
@@ -24,6 +27,8 @@ impl PartialEq for Value {
             (Self::Fun(f), Self::Fun(g)) => Rc::ptr_eq(f, g),
             (Self::Native(f), Self::Native(g)) => Rc::ptr_eq(f, g),
             (Self::Closure(f), Self::Closure(g)) => Rc::ptr_eq(f, g),
+            (Self::Class(c), Self::Class(k)) => Rc::ptr_eq(c, k),
+            (Self::Instance(i), Self::Instance(j)) => Rc::ptr_eq(i, j),
             _ => false,
         }
     }
@@ -44,6 +49,10 @@ impl Value {
 
     pub fn is_str(&self) -> bool {
         matches!(self, Self::Str(..))
+    }
+
+    pub fn is_instance(&self) -> bool {
+        matches!(self, Self::Instance(..))
     }
 
     pub fn into_num(self) -> f64 {
@@ -81,6 +90,20 @@ impl Value {
         }
     }
 
+    pub fn into_class(self) -> Rc<ObjClass> {
+        match self {
+            Self::Class(rc) => rc,
+            _ => panic!(),
+        }
+    }
+
+    pub fn into_instance(self) -> Rc<ObjInstance> {
+        match self {
+            Self::Instance(rc) => rc,
+            _ => panic!(),
+        }
+    }
+
     pub fn print(&self) {
         match self {
             Self::None => print!("none"),
@@ -90,6 +113,8 @@ impl Value {
             Self::Fun(f) => f.print(),
             Self::Native(f) => f.print(),
             Self::Closure(f) => f.print(),
+            Self::Class(c) => c.print(),
+            Value::Instance(i) => i.print(),
         }
     }
 }
@@ -182,5 +207,45 @@ impl ObjUpvalue {
 
     pub fn set_value(&self, value: Value) {
         self.close(value);
+    }
+}
+
+pub struct ObjClass {
+    pub name: String,
+}
+
+impl ObjClass {
+    pub fn new(name: String) -> Self {
+        Self { name }
+    }
+
+    pub fn print(&self) {
+        print!("<class {}>", self.name);
+    }
+}
+
+pub struct ObjInstance {
+    pub class: Rc<ObjClass>,
+    pub fields: RefCell<HashMap<String, Value>>,
+}
+
+impl ObjInstance {
+    pub fn new(class: Rc<ObjClass>) -> Self {
+        Self {
+            class,
+            fields: RefCell::new(HashMap::new()),
+        }
+    }
+
+    pub fn print(&self) {
+        print!("<{} instance>", self.class.name);
+    }
+
+    pub fn get_field(&self, name: &str) -> Option<Value> {
+        self.fields.borrow().get(name).map(|v| v.clone())
+    }
+
+    pub fn set_field(&self, name: String, value: Value) {
+        self.fields.borrow_mut().insert(name, value);
     }
 }

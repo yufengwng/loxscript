@@ -7,7 +7,9 @@ use crate::bytecode::OpCode;
 use crate::compile;
 use crate::debug;
 use crate::value::NativeFn;
+use crate::value::ObjClass;
 use crate::value::ObjClosure;
+use crate::value::ObjInstance;
 use crate::value::ObjNative;
 use crate::value::ObjUpvalue;
 use crate::value::Value;
@@ -183,12 +185,12 @@ impl VM {
                 Constant => self.load_const(),
                 ConstantLong => self.load_const_long(),
                 DefineGlobal => {
-                    let name = self.frame_mut().read_constant().clone().into_str();
+                    let name = self.frame_mut().read_string();
                     let value = self.stack_pop();
                     self.globals.insert(name, value);
                 }
                 GetGlobal => {
-                    let name = self.frame_mut().read_constant().clone().into_str();
+                    let name = self.frame_mut().read_string();
                     let entry = self.globals.get(&name);
                     if entry.is_none() {
                         runtime_err!(self, "undefined variable '{}'", name);
@@ -198,7 +200,7 @@ impl VM {
                     self.stack_push(value);
                 }
                 SetGlobal => {
-                    let name = self.frame_mut().read_constant().clone().into_str();
+                    let name = self.frame_mut().read_string();
                     if !self.globals.contains_key(&name) {
                         runtime_err!(self, "undefined variable '{}'", name);
                         return InterpretResult::RuntimeErr;
@@ -239,6 +241,33 @@ impl VM {
                     } else {
                         self.stack[upvalue.location] = value;
                     }
+                }
+                GetProperty => {
+                    if !self.stack_peek(0).is_instance() {
+                        runtime_err!(self, "only instances have properties");
+                        return InterpretResult::RuntimeErr;
+                    }
+                    let instance = self.stack_peek(0).clone().into_instance();
+                    let name = self.frame_mut().read_string();
+                    if let Some(value) = instance.get_field(&name) {
+                        self.stack_pop();
+                        self.stack_push(value);
+                    } else {
+                        runtime_err!(self, "undefined property '{}'", name);
+                        return InterpretResult::RuntimeErr;
+                    }
+                }
+                SetProperty => {
+                    if !self.stack_peek(1).is_instance() {
+                        runtime_err!(self, "only instances have fields");
+                        return InterpretResult::RuntimeErr;
+                    }
+                    let instance = self.stack_peek(1).clone().into_instance();
+                    let name = self.frame_mut().read_string();
+                    let value = self.stack_pop();
+                    instance.set_field(name, value.clone());
+                    self.stack_pop();
+                    self.stack_push(value);
                 }
                 None => self.stack_push(Value::None),
                 True => self.stack_push(Value::Bool(true)),
@@ -302,6 +331,11 @@ impl VM {
                 CloseUpvalue => {
                     self.close_upvalues(self.stack.len() - 1);
                     self.stack_pop();
+                }
+                Class => {
+                    let name = self.frame_mut().read_string();
+                    let class = Rc::new(ObjClass::new(name));
+                    self.stack_push(Value::Class(class));
                 }
                 Return => {
                     let value = self.stack_pop();
@@ -384,11 +418,19 @@ impl VM {
         match value {
             Value::Closure(_) => self.call(value.into_closure(), arg_count),
             Value::Native(_) => self.call_native(value.into_native(), arg_count),
+            Value::Class(_) => self.call_class(value.into_class(), arg_count),
             _ => {
                 runtime_err!(self, "can only call functions and classes");
                 false
             }
         }
+    }
+
+    fn call_class(&mut self, class: Rc<ObjClass>, arg_count: usize) -> bool {
+        let instance = Rc::new(ObjInstance::new(class));
+        let stack_idx = self.stack.len() - arg_count - 1;
+        self.stack[stack_idx] = Value::Instance(instance);
+        true
     }
 
     fn call_native(&mut self, native: Rc<ObjNative>, arg_count: usize) -> bool {
@@ -498,6 +540,10 @@ impl CallFrame {
         let byte2 = self.closure.function.chunk.code(self.ip + 1) as u16;
         self.ip += 2;
         (byte2 << 8) | byte1
+    }
+
+    fn read_string(&mut self) -> String {
+        self.read_constant().clone().into_str()
     }
 
     fn read_constant(&mut self) -> &Value {

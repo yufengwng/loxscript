@@ -161,6 +161,8 @@ impl Compiler {
             self.decl_let();
         } else if self.matches(Token::Fun) {
             self.decl_function();
+        } else if self.matches(Token::Class) {
+            self.decl_class();
         } else {
             self.statement();
         }
@@ -171,23 +173,37 @@ impl Compiler {
     }
 
     fn decl_let(&mut self) {
-        let global_idx = self.parse_variable("expect variable name");
+        let idx = self.parse_variable("expect variable name");
         if self.matches(Token::Eq) {
             self.expression();
         } else {
             self.emit(OpCode::None);
         }
         self.consume(Token::Semi, "expect ';' after variable declaration");
-        self.define_variable(global_idx);
+        self.define_variable(idx);
     }
 
     fn decl_function(&mut self) {
-        let global_idx = self.parse_variable("expect function name");
+        let idx = self.parse_variable("expect function name");
         if self.ctx().depth > 0 {
             self.initialize_local();
         }
         self.function(FnKind::Function);
-        self.define_variable(global_idx);
+        self.define_variable(idx);
+    }
+
+    fn decl_class(&mut self) {
+        self.consume(Token::Ident, "expect class name");
+        let name = self.prev().slice.to_owned();
+        let idx = self.make_ident_constant(name);
+        self.declare_variable();
+
+        self.emit(OpCode::Class);
+        self.emit_byte(idx as u8);
+        self.define_variable(idx);
+
+        self.consume(Token::Lbrace, "expect '{' before class body");
+        self.consume(Token::Rbrace, "expect '}' after class body");
     }
 
     fn statement(&mut self) {
@@ -551,6 +567,19 @@ impl Compiler {
         self.emit_byte(arg_count as u8);
     }
 
+    fn dot(&mut self, assignable: bool) {
+        self.consume(Token::Ident, "expect property name after '.'");
+        let name = self.prev().slice.to_owned();
+        let idx = self.make_ident_constant(name);
+        if assignable && self.matches(Token::Eq) {
+            self.expression();
+            self.emit(OpCode::SetProperty);
+        } else {
+            self.emit(OpCode::GetProperty);
+        }
+        self.emit_byte(idx as u8);
+    }
+
     fn grouping(&mut self, _assignable: bool) {
         self.expression();
         self.consume(Token::Rparen, "expect ')' after expression");
@@ -850,6 +879,7 @@ impl Compiler {
     fn op_infix(&self, token: Token) -> Option<Box<ParseFn>> {
         Some(Box::new(match token {
             Token::Lparen => Compiler::call,
+            Token::Dot => Compiler::dot,
             Token::Plus => Compiler::binary,
             Token::Minus => Compiler::binary,
             Token::Star => Compiler::binary,
@@ -870,6 +900,7 @@ impl Compiler {
     fn op_prec(&self, token: Token) -> Prec {
         match token {
             Token::Lparen => Prec::Call,
+            Token::Dot => Prec::Call,
             Token::Plus => Prec::Term,
             Token::Minus => Prec::Term,
             Token::Star => Prec::Factor,

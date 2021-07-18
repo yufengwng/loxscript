@@ -37,6 +37,8 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
         SetLocal => byte_instruction("OP_SET_LOCAL", chunk, offset),
         GetUpvalue => byte_instruction("OP_GET_UPVALUE", chunk, offset),
         SetUpvalue => byte_instruction("OP_SET_UPVALUE", chunk, offset),
+        GetProperty => constant_instruction(opcode, chunk, offset),
+        SetProperty => constant_instruction(opcode, chunk, offset),
         None => simple_instruction("OP_NONE", offset),
         True => simple_instruction("OP_TRUE", offset),
         False => simple_instruction("OP_FALSE", offset),
@@ -60,6 +62,7 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
         Call => byte_instruction("OP_CALL", chunk, offset),
         Closure => closure_instruction("OP_CLOSURE", chunk, offset),
         CloseUpvalue => simple_instruction("OP_CLOSE_UPVALUE", offset),
+        Class => constant_instruction(opcode, chunk, offset),
         Return => simple_instruction("OP_RETURN", offset),
     };
 }
@@ -111,7 +114,9 @@ fn closure_instruction(name: &str, chunk: &Chunk, offset: usize) -> usize {
 }
 
 fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {
-    let (name, index, count) = if opcode == OpCode::Constant {
+    let (name, index, count) = if opcode == OpCode::Class {
+        ("OP_CLASS", chunk.code(offset + 1) as usize, 2)
+    } else if opcode == OpCode::Constant {
         ("OP_CONSTANT", chunk.code(offset + 1) as usize, 2)
     } else if opcode == OpCode::DefineGlobal {
         ("OP_DEFINE_GLOBAL", chunk.code(offset + 1) as usize, 2)
@@ -119,6 +124,10 @@ fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {
         ("OP_GET_GLOBAL", chunk.code(offset + 1) as usize, 2)
     } else if opcode == OpCode::SetGlobal {
         ("OP_SET_GLOBAL", chunk.code(offset + 1) as usize, 2)
+    } else if opcode == OpCode::GetProperty {
+        ("OP_GET_PROPERTY", chunk.code(offset + 1) as usize, 2)
+    } else if opcode == OpCode::SetProperty {
+        ("OP_SET_PROPERTY", chunk.code(offset + 1) as usize, 2)
     } else {
         let byte1 = chunk.code(offset + 1) as usize;
         let byte2 = chunk.code(offset + 2) as usize;
