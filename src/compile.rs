@@ -17,6 +17,7 @@ pub fn compile(source: String) -> Option<ObjFn> {
 struct Compiler {
     scanner: Scanner,
     contexts: Vec<Context>,
+    classes: Vec<ClassCtx>,
     curr: Option<Span>,
     prev: Option<Span>,
     had_error: bool,
@@ -28,6 +29,7 @@ impl Compiler {
         let mut this = Self {
             scanner: Scanner::new(source),
             contexts: Vec::new(),
+            classes: Vec::new(),
             curr: None,
             prev: None,
             had_error: false,
@@ -195,15 +197,24 @@ impl Compiler {
     fn decl_class(&mut self) {
         self.consume(Token::Ident, "expect class name");
         let name = self.prev().slice.to_owned();
-        let idx = self.make_ident_constant(name);
+        let idx = self.make_ident_constant(name.clone());
         self.declare_variable();
 
         self.emit(OpCode::Class);
         self.emit_byte(idx as u8);
         self.define_variable(idx);
 
+        self.classes.push(ClassCtx::new());
+
+        self.named_variable(name, false);
         self.consume(Token::Lbrace, "expect '{' before class body");
+        while !self.check(Token::EOF) && !self.check(Token::Rbrace) {
+            self.method();
+        }
         self.consume(Token::Rbrace, "expect '}' after class body");
+        self.emit(OpCode::Pop);
+
+        self.classes.pop();
     }
 
     fn statement(&mut self) {
@@ -240,6 +251,9 @@ impl Compiler {
         if self.matches(Token::Semi) {
             self.emit_return();
         } else {
+            if self.ctx().fn_kind == FnKind::Initializer {
+                self.error("can't return a value from an initializer");
+            }
             self.expression();
             self.consume(Token::Semi, "expect ';' after return value");
             self.emit(OpCode::Return);
@@ -413,6 +427,21 @@ impl Compiler {
         self.emit(OpCode::Pop);
     }
 
+    fn method(&mut self) {
+        self.consume(Token::Ident, "expect method name");
+        let name = self.prev().slice.to_owned();
+        let fn_kind = if name == "init" {
+            FnKind::Initializer
+        } else {
+            FnKind::Method
+        };
+        let idx = self.make_ident_constant(name);
+        self.function(fn_kind);
+
+        self.emit(OpCode::Method);
+        self.emit_byte(idx as u8);
+    }
+
     fn function(&mut self, fn_kind: FnKind) {
         self.ctx_init(fn_kind);
         self.scope_begin();
@@ -574,10 +603,16 @@ impl Compiler {
         if assignable && self.matches(Token::Eq) {
             self.expression();
             self.emit(OpCode::SetProperty);
+            self.emit_byte(idx as u8);
+        } else if self.matches(Token::Lparen) {
+            let arg_count = self.argument_list();
+            self.emit(OpCode::Invoke);
+            self.emit_byte(idx as u8);
+            self.emit_byte(arg_count as u8);
         } else {
             self.emit(OpCode::GetProperty);
+            self.emit_byte(idx as u8);
         }
-        self.emit_byte(idx as u8);
     }
 
     fn grouping(&mut self, _assignable: bool) {
@@ -592,6 +627,14 @@ impl Compiler {
             Token::False => self.emit(OpCode::False),
             _ => unreachable!(),
         }
+    }
+
+    fn self_(&mut self, _assignable: bool) {
+        if self.classes.is_empty() {
+            self.error("can't use 'self' outside of a class");
+            return;
+        }
+        self.variable(false);
     }
 
     fn variable(&mut self, assignable: bool) {
@@ -755,7 +798,12 @@ impl Compiler {
     }
 
     fn emit_return(&mut self) {
-        self.emit(OpCode::None);
+        if self.ctx().fn_kind == FnKind::Initializer {
+            self.emit(OpCode::GetLocal);
+            self.emit_byte(0);
+        } else {
+            self.emit(OpCode::None);
+        }
         self.emit(OpCode::Return);
     }
 
@@ -796,8 +844,15 @@ impl Compiler {
             let name = &self.prev().slice;
             ctx.function.name = name.to_owned();
         }
+        let name = if fn_kind.is_method() {
+            "self".to_string()
+        } else {
+            String::new()
+        };
+        let mut local = Local::new(name, 0);
+        local.initialized = true;
+        ctx.locals.push(local);
         ctx.fn_kind = fn_kind;
-        ctx.locals.push(Local::new(String::new(), 0));
         self.contexts.push(ctx);
     }
 
@@ -869,6 +924,7 @@ impl Compiler {
             Token::None => Compiler::literal,
             Token::True => Compiler::literal,
             Token::False => Compiler::literal,
+            Token::Self_ => Compiler::self_,
             Token::Ident => Compiler::variable,
             Token::Str => Compiler::string,
             Token::Num => Compiler::number,
@@ -963,6 +1019,17 @@ impl Prec {
 enum FnKind {
     Script,
     Function,
+    Method,
+    Initializer,
+}
+
+impl FnKind {
+    fn is_method(&self) -> bool {
+        match self {
+            Self::Method | Self::Initializer => true,
+            _ => false,
+        }
+    }
 }
 
 struct Context {
@@ -988,6 +1055,14 @@ impl Context {
             loop_starts: Vec::new(),
             depth: 0,
         }
+    }
+}
+
+struct ClassCtx {}
+
+impl ClassCtx {
+    fn new() -> Self {
+        Self {}
     }
 }
 

@@ -40,6 +40,8 @@ pub enum OpCode {
     Closure,
     CloseUpvalue,
     Class,
+    Method,
+    Invoke,
     Return,
 }
 
@@ -84,6 +86,8 @@ impl TryFrom<u8> for OpCode {
             b if b == Closure as u8 => Closure,
             b if b == CloseUpvalue as u8 => CloseUpvalue,
             b if b == Class as u8 => Class,
+            b if b == Method as u8 => Method,
+            b if b == Invoke as u8 => Invoke,
             b if b == Return as u8 => Return,
             _ => return Err(()),
         })

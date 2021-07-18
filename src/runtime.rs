@@ -7,6 +7,7 @@ use crate::bytecode::OpCode;
 use crate::compile;
 use crate::debug;
 use crate::value::NativeFn;
+use crate::value::ObjBoundMethod;
 use crate::value::ObjClass;
 use crate::value::ObjClosure;
 use crate::value::ObjInstance;
@@ -65,12 +66,13 @@ impl VM {
             None => return InterpretResult::CompileErr,
         };
 
-        self.stack_push(Value::Fun(fn_rc.clone()));
-        self.call(Rc::new(ObjClosure::new(fn_rc)), 0);
-
         if cfg!(feature = "debug") {
             println!("== <vm> ==");
         }
+
+        self.stack_push(Value::Fun(fn_rc.clone()));
+        self.call(Rc::new(ObjClosure::new(fn_rc)), 0);
+
         let result = self.run();
         self.stack_print();
         result
@@ -252,8 +254,7 @@ impl VM {
                     if let Some(value) = instance.get_field(&name) {
                         self.stack_pop();
                         self.stack_push(value);
-                    } else {
-                        runtime_err!(self, "undefined property '{}'", name);
+                    } else if !self.bind_method(instance, &name) {
                         return InterpretResult::RuntimeErr;
                     }
                 }
@@ -337,6 +338,17 @@ impl VM {
                     let class = Rc::new(ObjClass::new(name));
                     self.stack_push(Value::Class(class));
                 }
+                Method => {
+                    let name = self.frame_mut().read_string();
+                    self.define_method(name);
+                }
+                Invoke => {
+                    let name = self.frame_mut().read_string();
+                    let arg_count = self.frame_mut().read_byte() as usize;
+                    if !self.invoke(&name, arg_count) {
+                        return InterpretResult::RuntimeErr;
+                    }
+                }
                 Return => {
                     let value = self.stack_pop();
                     self.frame_pop();
@@ -402,10 +414,9 @@ impl VM {
     fn frame_pop(&mut self) {
         let frame = self.frames.pop().unwrap();
         self.close_upvalues(frame.base_slot);
-        for _ in 0..frame.closure.function.arity {
+        while self.stack.len() > frame.base_slot {
             self.stack_pop();
         }
-        self.stack_pop();
     }
 
     fn define_native(&mut self, name: &str, function: NativeFn, arity: usize) {
@@ -414,11 +425,55 @@ impl VM {
         self.globals.insert(name.to_owned(), value);
     }
 
+    fn define_method(&mut self, name: String) {
+        let method = self.stack_pop().into_closure();
+        let class = self.stack_peek(0).clone().into_class();
+        class.set_method(name, method);
+    }
+
+    fn bind_method(&mut self, instance: Rc<ObjInstance>, name: &str) -> bool {
+        if let Some(method) = instance.class.get_method(name) {
+            let bound = ObjBoundMethod::new(instance, method);
+            self.stack_pop();
+            self.stack_push(Value::BoundMethod(bound));
+            return true;
+        } else {
+            runtime_err!(self, "undefined property '{}'", name);
+            return false;
+        }
+    }
+
+    fn invoke(&mut self, name: &str, arg_count: usize) -> bool {
+        let receiver = self.stack_peek(arg_count).clone();
+        if !receiver.is_instance() {
+            runtime_err!(self, "only instances have methods");
+            return false;
+        }
+        let instance = receiver.into_instance();
+        if let Some(value) = instance.get_field(name) {
+            let stack_idx = self.stack.len() - arg_count - 1;
+            self.stack[stack_idx] = value.clone();
+            self.call_value(value, arg_count)
+        } else {
+            self.invoke_from_class(&instance.class, name, arg_count)
+        }
+    }
+
+    fn invoke_from_class(&mut self, class: &Rc<ObjClass>, name: &str, arg_count: usize) -> bool {
+        if let Some(method) = class.get_method(name) {
+            self.call(method, arg_count)
+        } else {
+            runtime_err!(self, "undefined property '{}'", name);
+            false
+        }
+    }
+
     fn call_value(&mut self, value: Value, arg_count: usize) -> bool {
         match value {
             Value::Closure(_) => self.call(value.into_closure(), arg_count),
             Value::Native(_) => self.call_native(value.into_native(), arg_count),
             Value::Class(_) => self.call_class(value.into_class(), arg_count),
+            Value::BoundMethod(_) => self.call_method(value.into_bound(), arg_count),
             _ => {
                 runtime_err!(self, "can only call functions and classes");
                 false
@@ -426,11 +481,25 @@ impl VM {
         }
     }
 
+    fn call_method(&mut self, bound: ObjBoundMethod, arg_count: usize) -> bool {
+        let stack_idx = self.stack.len() - arg_count - 1;
+        let instance = Value::Instance(bound.receiver);
+        self.stack[stack_idx] = instance;
+        self.call(bound.method, arg_count)
+    }
+
     fn call_class(&mut self, class: Rc<ObjClass>, arg_count: usize) -> bool {
-        let instance = Rc::new(ObjInstance::new(class));
+        let instance = Rc::new(ObjInstance::new(class.clone()));
         let stack_idx = self.stack.len() - arg_count - 1;
         self.stack[stack_idx] = Value::Instance(instance);
-        true
+        if let Some(initializer) = class.get_method("init") {
+            self.call(initializer, arg_count)
+        } else if arg_count != 0 {
+            runtime_err!(self, "expected 0 arguments but got {}", arg_count);
+            false
+        } else {
+            true
+        }
     }
 
     fn call_native(&mut self, native: Rc<ObjNative>, arg_count: usize) -> bool {

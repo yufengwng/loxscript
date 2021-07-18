@@ -15,6 +15,7 @@ pub enum Value {
     Closure(Rc<ObjClosure>),
     Class(Rc<ObjClass>),
     Instance(Rc<ObjInstance>),
+    BoundMethod(ObjBoundMethod),
 }
 
 impl PartialEq for Value {
@@ -29,6 +30,7 @@ impl PartialEq for Value {
             (Self::Closure(f), Self::Closure(g)) => Rc::ptr_eq(f, g),
             (Self::Class(c), Self::Class(k)) => Rc::ptr_eq(c, k),
             (Self::Instance(i), Self::Instance(j)) => Rc::ptr_eq(i, j),
+            (Self::BoundMethod(m), Self::BoundMethod(n)) => m == n,
             _ => false,
         }
     }
@@ -104,6 +106,13 @@ impl Value {
         }
     }
 
+    pub fn into_bound(self) -> ObjBoundMethod {
+        match self {
+            Self::BoundMethod(m) => m,
+            _ => panic!(),
+        }
+    }
+
     pub fn print(&self) {
         match self {
             Self::None => print!("none"),
@@ -114,7 +123,8 @@ impl Value {
             Self::Native(f) => f.print(),
             Self::Closure(f) => f.print(),
             Self::Class(c) => c.print(),
-            Value::Instance(i) => i.print(),
+            Self::Instance(i) => i.print(),
+            Self::BoundMethod(m) => m.print(),
         }
     }
 }
@@ -212,21 +222,33 @@ impl ObjUpvalue {
 
 pub struct ObjClass {
     pub name: String,
+    methods: RefCell<HashMap<String, Rc<ObjClosure>>>,
 }
 
 impl ObjClass {
     pub fn new(name: String) -> Self {
-        Self { name }
+        Self {
+            name,
+            methods: RefCell::new(HashMap::new()),
+        }
     }
 
     pub fn print(&self) {
         print!("<class {}>", self.name);
     }
+
+    pub fn get_method(&self, name: &str) -> Option<Rc<ObjClosure>> {
+        self.methods.borrow().get(name).map(|v| v.clone())
+    }
+
+    pub fn set_method(&self, name: String, method: Rc<ObjClosure>) {
+        self.methods.borrow_mut().insert(name, method);
+    }
 }
 
 pub struct ObjInstance {
     pub class: Rc<ObjClass>,
-    pub fields: RefCell<HashMap<String, Value>>,
+    fields: RefCell<HashMap<String, Value>>,
 }
 
 impl ObjInstance {
@@ -247,5 +269,28 @@ impl ObjInstance {
 
     pub fn set_field(&self, name: String, value: Value) {
         self.fields.borrow_mut().insert(name, value);
+    }
+}
+
+#[derive(Clone)]
+pub struct ObjBoundMethod {
+    pub receiver: Rc<ObjInstance>,
+    pub method: Rc<ObjClosure>,
+}
+
+impl PartialEq for ObjBoundMethod {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.receiver, &other.receiver)
+            && Rc::ptr_eq(&self.method, &other.method)
+    }
+}
+
+impl ObjBoundMethod {
+    pub fn new(receiver: Rc<ObjInstance>, method: Rc<ObjClosure>) -> Self {
+        Self { receiver, method }
+    }
+
+    pub fn print(&self) {
+        self.method.print();
     }
 }

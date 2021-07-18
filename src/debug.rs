@@ -63,6 +63,8 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
         Closure => closure_instruction("OP_CLOSURE", chunk, offset),
         CloseUpvalue => simple_instruction("OP_CLOSE_UPVALUE", offset),
         Class => constant_instruction(opcode, chunk, offset),
+        Method => constant_instruction(opcode, chunk, offset),
+        Invoke => invoke_instruction("OP_INVOKE", chunk, offset),
         Return => simple_instruction("OP_RETURN", offset),
     };
 }
@@ -113,9 +115,20 @@ fn closure_instruction(name: &str, chunk: &Chunk, offset: usize) -> usize {
     next
 }
 
+fn invoke_instruction(name: &str, chunk: &Chunk, offset: usize) -> usize {
+    let idx = chunk.code(offset + 1) as usize;
+    let arg_count = chunk.code(offset + 2) as usize;
+    print!("{:<16}    ({} args) {:4} '", name, arg_count, idx);
+    chunk.constant(idx).print();
+    println!("'");
+    offset + 3
+}
+
 fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {
     let (name, index, count) = if opcode == OpCode::Class {
         ("OP_CLASS", chunk.code(offset + 1) as usize, 2)
+    } else if opcode == OpCode::Method {
+        ("OP_METHOD", chunk.code(offset + 1) as usize, 2)
     } else if opcode == OpCode::Constant {
         ("OP_CONSTANT", chunk.code(offset + 1) as usize, 2)
     } else if opcode == OpCode::DefineGlobal {
