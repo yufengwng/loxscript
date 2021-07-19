@@ -175,18 +175,18 @@ impl Compiler {
     }
 
     fn decl_let(&mut self) {
-        let idx = self.parse_variable("expect variable name");
+        let idx = self.parse_variable("expected variable name");
         if self.matches(Token::Eq) {
             self.expression();
         } else {
             self.emit(OpCode::None);
         }
-        self.consume(Token::Semi, "expect ';' after variable declaration");
+        self.consume(Token::Semi, "expected ';' after variable declaration");
         self.define_variable(idx);
     }
 
     fn decl_function(&mut self) {
-        let idx = self.parse_variable("expect function name");
+        let idx = self.parse_variable("expected function name");
         if self.ctx().depth > 0 {
             self.initialize_local();
         }
@@ -195,7 +195,7 @@ impl Compiler {
     }
 
     fn decl_class(&mut self) {
-        self.consume(Token::Ident, "expect class name");
+        self.consume(Token::Ident, "expected class name");
         let name = self.prev().slice.to_owned();
         let idx = self.make_ident_constant(name.clone());
         self.declare_variable();
@@ -207,10 +207,10 @@ impl Compiler {
         self.classes.push(ClassCtx::new());
 
         if self.matches(Token::Lt) {
-            self.consume(Token::Ident, "expect superclass name");
+            self.consume(Token::Ident, "expected superclass name");
             let superclass_name = self.prev().slice.to_owned();
             if superclass_name == name {
-                self.error("a class can't inherit from itself");
+                self.error("a class cannot inherit from itself");
             }
 
             self.named_variable(superclass_name, false);
@@ -225,11 +225,11 @@ impl Compiler {
             self.named_variable(name.clone(), false);
         }
 
-        self.consume(Token::Lbrace, "expect '{' before class body");
+        self.consume(Token::Lbrace, "expected '{' before class body");
         while !self.check(Token::EOF) && !self.check(Token::Rbrace) {
             self.method();
         }
-        self.consume(Token::Rbrace, "expect '}' after class body");
+        self.consume(Token::Rbrace, "expected '}' after class body");
 
         self.emit(OpCode::Pop);
         if self.classes.last().unwrap().has_superclass {
@@ -266,17 +266,17 @@ impl Compiler {
 
     fn stmt_return(&mut self) {
         if self.ctx().fn_kind == FnKind::Script {
-            self.error("can't return from top-level code");
+            self.error("cannot return from top-level code");
         }
 
         if self.matches(Token::Semi) {
             self.emit_return();
         } else {
             if self.ctx().fn_kind == FnKind::Initializer {
-                self.error("can't return a value from an initializer");
+                self.error("cannot return a value from an initializer");
             }
             self.expression();
-            self.consume(Token::Semi, "expect ';' after return value");
+            self.consume(Token::Semi, "expected ';' after return value");
             self.emit(OpCode::Return);
         }
     }
@@ -287,7 +287,7 @@ impl Compiler {
             return;
         }
 
-        self.consume(Token::Semi, "expect ';' after break");
+        self.consume(Token::Semi, "expected ';' after break");
         let mut num_pops = 0;
         let ctx = self.ctx();
         let loop_depth = ctx.loop_depths.last().unwrap().clone();
@@ -314,7 +314,7 @@ impl Compiler {
             return;
         }
 
-        self.consume(Token::Semi, "expect ';' after continue");
+        self.consume(Token::Semi, "expected ';' after continue");
         let mut num_pops = 0;
         let ctx = self.ctx();
         let loop_depth = ctx.loop_depths.last().unwrap().clone();
@@ -336,7 +336,7 @@ impl Compiler {
 
     fn stmt_if(&mut self) {
         self.expression();
-        self.consume(Token::Lbrace, "expect '{' after condition");
+        self.consume(Token::Lbrace, "expected '{' after condition");
 
         let mut then_jump = self.emit_jump(OpCode::JumpIfFalse);
         self.emit(OpCode::Pop);
@@ -349,7 +349,7 @@ impl Compiler {
 
         while self.matches(Token::Elif) {
             self.expression();
-            self.consume(Token::Lbrace, "expect '{' after condition");
+            self.consume(Token::Lbrace, "expected '{' after condition");
 
             then_jump = self.emit_jump(OpCode::JumpIfFalse);
             self.emit(OpCode::Pop);
@@ -361,7 +361,7 @@ impl Compiler {
         }
 
         if self.matches(Token::Else) {
-            self.consume(Token::Lbrace, "expect '{' after else");
+            self.consume(Token::Lbrace, "expected '{' after else");
             self.stmt_block();
         }
 
@@ -375,7 +375,7 @@ impl Compiler {
         self.loop_begin(loop_start);
 
         self.expression();
-        self.consume(Token::Lbrace, "expect '{' after condition");
+        self.consume(Token::Lbrace, "expected '{' after condition");
 
         let exit_jump = self.emit_jump(OpCode::JumpIfFalse);
         self.emit(OpCode::Pop);
@@ -404,7 +404,7 @@ impl Compiler {
         let mut loop_start = self.chunk().code_len();
         let exit_jump = if !self.matches(Token::Semi) {
             self.expression();
-            self.consume(Token::Semi, "expect ';' after loop condition");
+            self.consume(Token::Semi, "expected ';' after loop condition");
             let exit = self.emit_jump(OpCode::JumpIfFalse);
             self.emit(OpCode::Pop);
             Some(exit)
@@ -418,7 +418,7 @@ impl Compiler {
             let incr_start = self.chunk().code_len();
             self.expression();
             self.emit(OpCode::Pop);
-            self.consume(Token::Lbrace, "expect '{' after for clauses");
+            self.consume(Token::Lbrace, "expected '{' after for clauses");
 
             self.emit_loop(loop_start);
             self.patch_jump(body_jump);
@@ -444,12 +444,12 @@ impl Compiler {
 
     fn stmt_expression(&mut self) {
         self.expression();
-        self.consume(Token::Semi, "expect ';' after expression");
+        self.consume(Token::Semi, "expected ';' after expression");
         self.emit(OpCode::Pop);
     }
 
     fn method(&mut self) {
-        self.consume(Token::Ident, "expect method name");
+        self.consume(Token::Ident, "expected method name");
         let name = self.prev().slice.to_owned();
         let fn_kind = if name == "init" {
             FnKind::Initializer
@@ -467,9 +467,9 @@ impl Compiler {
         self.ctx_init(fn_kind);
         self.scope_begin();
 
-        self.consume(Token::Lparen, "expect '(' after function name");
+        self.consume(Token::Lparen, "expected '(' after function name");
         self.parameter_list();
-        self.consume(Token::Lbrace, "expect '{' before function body");
+        self.consume(Token::Lbrace, "expected '{' before function body");
         self.block();
 
         let ctx = self.ctx_end();
@@ -489,16 +489,16 @@ impl Compiler {
                 let ctx = self.ctx_mut();
                 ctx.function.arity += 1;
                 if ctx.function.arity > 255 {
-                    self.error_curr("can't have more than 255 parameters");
+                    self.error_curr("cannot have more than 255 parameters");
                 }
-                let const_idx = self.parse_variable("expect parameter name");
+                let const_idx = self.parse_variable("expected parameter name");
                 self.define_variable(const_idx);
                 if !self.matches(Token::Comma) {
                     break;
                 }
             }
         }
-        self.consume(Token::Rparen, "expect ')' after parameters");
+        self.consume(Token::Rparen, "expected ')' after parameters");
     }
 
     fn argument_list(&mut self) -> usize {
@@ -507,7 +507,7 @@ impl Compiler {
             loop {
                 self.expression();
                 if arg_count == 255 {
-                    self.error("can't have more than 255 arguments");
+                    self.error("cannot have more than 255 arguments");
                 }
                 arg_count += 1;
                 if !self.matches(Token::Comma) {
@@ -515,7 +515,7 @@ impl Compiler {
                 }
             }
         }
-        self.consume(Token::Rparen, "expect ')' after arguments");
+        self.consume(Token::Rparen, "expected ')' after arguments");
         arg_count
     }
 
@@ -523,7 +523,7 @@ impl Compiler {
         while !self.check(Token::Rbrace) && !self.check(Token::EOF) {
             self.declaration();
         }
-        self.consume(Token::Rbrace, "expect '}' after block");
+        self.consume(Token::Rbrace, "expected '}' after block");
     }
 
     fn parse_variable(&mut self, message: &str) -> usize {
@@ -541,7 +541,7 @@ impl Compiler {
 
         let prefix_fn = self.op_prefix(self.prev().token);
         if prefix_fn.is_none() {
-            self.error("expect expression");
+            self.error("expected an expression");
             return;
         }
 
@@ -618,7 +618,7 @@ impl Compiler {
     }
 
     fn dot(&mut self, assignable: bool) {
-        self.consume(Token::Ident, "expect property name after '.'");
+        self.consume(Token::Ident, "expected property name after '.'");
         let name = self.prev().slice.to_owned();
         let idx = self.make_ident_constant(name);
         if assignable && self.matches(Token::Eq) {
@@ -638,7 +638,7 @@ impl Compiler {
 
     fn grouping(&mut self, _assignable: bool) {
         self.expression();
-        self.consume(Token::Rparen, "expect ')' after expression");
+        self.consume(Token::Rparen, "expected ')' after expression");
     }
 
     fn literal(&mut self, _assignable: bool) {
@@ -652,7 +652,7 @@ impl Compiler {
 
     fn self_(&mut self, _assignable: bool) {
         if self.classes.is_empty() {
-            self.error("can't use 'self' outside of a class");
+            self.error("cannot use 'self' outside of a class");
             return;
         }
         self.variable(false);
@@ -660,13 +660,13 @@ impl Compiler {
 
     fn super_(&mut self, _assignable: bool) {
         if self.classes.is_empty() {
-            self.error("can't use 'super' outside of a class");
+            self.error("cannot use 'super' outside of a class");
         } else if !self.classes.last().unwrap().has_superclass {
-            self.error("can't use 'super' in a class with no superclass");
+            self.error("cannot use 'super' in a class with no superclass");
         }
 
-        self.consume(Token::Dot, "expect '.' after 'super'");
-        self.consume(Token::Ident, "expect superclass method name");
+        self.consume(Token::Dot, "expected '.' after 'super'");
+        self.consume(Token::Ident, "expected superclass method name");
         let name = self.prev().slice.to_owned();
         let idx = self.make_ident_constant(name);
 
@@ -752,7 +752,7 @@ impl Compiler {
             }
         }
         if already_exists {
-            self.error("already variable with this name in this scope");
+            self.error("variable with this name already declared in this scope");
         }
         self.add_local(name);
     }
@@ -801,7 +801,7 @@ impl Compiler {
         for (idx, local) in ctx.locals.iter().enumerate().rev() {
             if local.name == name {
                 if !local.initialized {
-                    self.error("can't read local variable in its own initializer");
+                    self.error("cannot read local variable in its own initializer");
                 }
                 return Some(idx);
             }
@@ -1112,7 +1112,9 @@ struct ClassCtx {
 
 impl ClassCtx {
     fn new() -> Self {
-        Self { has_superclass: false }
+        Self {
+            has_superclass: false,
+        }
     }
 }
 

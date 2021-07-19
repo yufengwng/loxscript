@@ -15,7 +15,7 @@ pub enum Value {
     Closure(Rc<ObjClosure>),
     Class(Rc<ObjClass>),
     Instance(Rc<ObjInstance>),
-    BoundMethod(ObjBoundMethod),
+    BoundMethod(Rc<ObjBoundMethod>),
 }
 
 impl PartialEq for Value {
@@ -30,7 +30,7 @@ impl PartialEq for Value {
             (Self::Closure(f), Self::Closure(g)) => Rc::ptr_eq(f, g),
             (Self::Class(c), Self::Class(k)) => Rc::ptr_eq(c, k),
             (Self::Instance(i), Self::Instance(j)) => Rc::ptr_eq(i, j),
-            (Self::BoundMethod(m), Self::BoundMethod(n)) => m == n,
+            (Self::BoundMethod(m), Self::BoundMethod(n)) => Rc::ptr_eq(m, n),
             _ => false,
         }
     }
@@ -110,7 +110,7 @@ impl Value {
         }
     }
 
-    pub fn into_bound(self) -> ObjBoundMethod {
+    pub fn into_bound(self) -> Rc<ObjBoundMethod> {
         match self {
             Self::BoundMethod(m) => m,
             _ => panic!(),
@@ -162,17 +162,22 @@ impl ObjFn {
 pub type NativeFn = fn(Vec<Value>) -> Value;
 
 pub struct ObjNative {
+    pub name: String,
     pub function: NativeFn,
     pub arity: usize,
 }
 
 impl ObjNative {
-    pub fn new(function: NativeFn, arity: usize) -> Self {
-        Self { function, arity }
+    pub fn new(name: String, function: NativeFn, arity: usize) -> Self {
+        Self {
+            name,
+            function,
+            arity,
+        }
     }
 
     pub fn print(&self) {
-        print!("<native fn>");
+        print!("<native fn {}>", self.name);
     }
 }
 
@@ -285,14 +290,13 @@ impl ObjInstance {
 
 #[derive(Clone)]
 pub struct ObjBoundMethod {
-    pub receiver: Rc<ObjInstance>,
-    pub method: Rc<ObjClosure>,
+    receiver: Rc<ObjInstance>,
+    method: Rc<ObjClosure>,
 }
 
 impl PartialEq for ObjBoundMethod {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.receiver, &other.receiver)
-            && Rc::ptr_eq(&self.method, &other.method)
+        Rc::ptr_eq(&self.receiver, &other.receiver) && Rc::ptr_eq(&self.method, &other.method)
     }
 }
 
@@ -303,5 +307,13 @@ impl ObjBoundMethod {
 
     pub fn print(&self) {
         self.method.print();
+    }
+
+    pub fn receiver(&self) -> Rc<ObjInstance> {
+        self.receiver.clone()
+    }
+
+    pub fn method(&self) -> Rc<ObjClosure> {
+        self.method.clone()
     }
 }

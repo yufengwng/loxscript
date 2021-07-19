@@ -132,7 +132,7 @@ impl VM {
                     let rhs = self.stack_pop().into_num();
                     let lhs = self.stack_pop().into_num();
                     if rhs == 0.0 {
-                        eprintln!("[lox] runtime error: divide-by-zero");
+                        runtime_err!(self, "divide or modulo by zero");
                         return InterpretResult::RuntimeErr;
                     }
                     self.stack_push(Value::Num(expand!(lhs $op rhs)));
@@ -444,7 +444,7 @@ impl VM {
     }
 
     fn define_native(&mut self, name: &str, function: NativeFn, arity: usize) {
-        let native = ObjNative::new(function, arity);
+        let native = ObjNative::new(name.to_owned(), function, arity);
         let value = Value::Native(Rc::new(native));
         self.globals.insert(name.to_owned(), value);
     }
@@ -458,7 +458,7 @@ impl VM {
     fn bind_method(&mut self, class: &Rc<ObjClass>, name: &str) -> bool {
         if let Some(method) = class.get_method(name) {
             let instance = self.stack_pop().into_instance();
-            let bound = ObjBoundMethod::new(instance, method);
+            let bound = Rc::new(ObjBoundMethod::new(instance, method));
             self.stack_push(Value::BoundMethod(bound));
             return true;
         } else {
@@ -505,11 +505,11 @@ impl VM {
         }
     }
 
-    fn call_method(&mut self, bound: ObjBoundMethod, arg_count: usize) -> bool {
+    fn call_method(&mut self, bound: Rc<ObjBoundMethod>, arg_count: usize) -> bool {
         let stack_idx = self.stack.len() - arg_count - 1;
-        let instance = Value::Instance(bound.receiver);
+        let instance = Value::Instance(bound.receiver());
         self.stack[stack_idx] = instance;
-        self.call(bound.method, arg_count)
+        self.call(bound.method(), arg_count)
     }
 
     fn call_class(&mut self, class: Rc<ObjClass>, arg_count: usize) -> bool {
