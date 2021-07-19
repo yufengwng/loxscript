@@ -137,6 +137,14 @@ impl Chunk {
 
     pub fn add_constant(&mut self, value: Value) -> usize {
         let index = self.constants.len();
+        if value.is_str() {
+            let target = value.clone().into_str();
+            for (i, val) in self.constants.iter().enumerate() {
+                if val.is_str() && val.clone().into_str() == target {
+                    return i;
+                }
+            }
+        }
         self.constants.push(value);
         return index;
     }
