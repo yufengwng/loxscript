@@ -1,5 +1,5 @@
 if false {
-  print(not_defined);
+  print(not_defined); #!! [line 2] Error at ')': expected an expression
 }
 
-print("ok"); #=> ok
+print("ok");

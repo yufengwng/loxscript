@@ -1,2 +1,2 @@
-#!! [line 2] parse error at '.': expected an expression
+#!! [line 2] Error at '.': expected an expression
 .123;

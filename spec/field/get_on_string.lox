@@ -1,1 +1,1 @@
-"str".foo; #@! [line 1] runtime error: only instances have properties
+"str".foo; #@! only instances have properties

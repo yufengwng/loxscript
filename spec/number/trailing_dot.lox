@@ -1,2 +1,2 @@
-#!! [line 2] parse error at ';': expected property name after '.'
+#!! [line 2] Error at ';': expected property name after '.'
 123.;

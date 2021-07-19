@@ -1,1 +1,1 @@
-1 / 0; #@! [line 1] runtime error: divide or modulo by zero
+1 / 0; #@! divide or modulo by zero

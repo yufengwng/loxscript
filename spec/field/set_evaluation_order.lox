@@ -1,2 +1,2 @@
-undefined1.bar #@! [line 1] runtime error: undefined variable 'undefined1'
+undefined1.bar #@! undefined variable 'undefined1'
   = undefined2;

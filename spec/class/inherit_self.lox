@@ -1,1 +1,1 @@
-class Foo < Foo {} #!! [line 1] resolve error at 'Foo': a class cannot inherit from itself
+class Foo < Foo {} #!! [line 1] Error at 'Foo': a class cannot inherit from itself

@@ -1,1 +1,1 @@
-true(); #@! [line 1] runtime error: can only call functions and classes
+true(); #@! can only call functions and classes

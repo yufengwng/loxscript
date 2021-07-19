@@ -1,2 +1,2 @@
-#!! [line 2] parse error at 'fun': expected an expression
+#!! [line 2] Error at 'fun': expected an expression
 for let a = 1; a < 2; fun {}

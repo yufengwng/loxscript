@@ -1,2 +1,2 @@
 let a = 1;
--a = "value"; #!! [line 2] parse error at '=': invalid assignment target
+-a = "value"; #!! [line 2] Error at '=': invalid assignment target

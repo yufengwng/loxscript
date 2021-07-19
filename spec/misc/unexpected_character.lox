@@ -1,3 +1,2 @@
-#!! [line 3] parse error: unrecognized character '|'
-#!! [line 3] parse error at 'b': expected ')' after arguments
+#!! [line 2] Error: unexpected character
 foo(a | b);

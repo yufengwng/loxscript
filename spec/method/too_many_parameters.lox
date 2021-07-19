@@ -1,4 +1,0 @@
-class Foo {
-  # 9 parameters.
-  method(a, b, c, d, e, f, g, h, i) {} #!! [line 3] parse error at 'i': cannot have more than 8 parameters
-}

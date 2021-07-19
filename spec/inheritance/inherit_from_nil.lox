@@ -1,2 +1,2 @@
 let Nil = none;
-class Foo < Nil {} #@! [line 2] runtime error: superclass must be a class
+class Foo < Nil {} #@! superclass must be a class

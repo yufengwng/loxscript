@@ -1,0 +1,1 @@
+self; #!! [line 1] Error at 'self': cannot use 'self' outside of a class

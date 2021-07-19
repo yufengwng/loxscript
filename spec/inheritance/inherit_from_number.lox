@@ -1,2 +1,2 @@
 let Number = 123;
-class Foo < Number {} #@! [line 2] runtime error: superclass must be a class
+class Foo < Number {} #@! superclass must be a class

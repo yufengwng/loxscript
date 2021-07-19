@@ -1,2 +1,2 @@
 class Foo {}
-Foo.bar; #@! [line 2] runtime error: only instances have properties
+Foo.bar; #@! only instances have properties

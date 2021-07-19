@@ -2,4 +2,4 @@ class Foo {
   init(a, b) {}
 }
 
-let foo = Foo(1); #@! [line 5] runtime error: expected 2 arguments but got 1
+let foo = Foo(1); #@! expected 2 arguments but got 1

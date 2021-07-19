@@ -1,1 +1,1 @@
-123.foo; #@! [line 1] runtime error: only instances have properties
+123.foo; #@! only instances have properties

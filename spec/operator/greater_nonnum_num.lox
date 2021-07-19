@@ -1,1 +1,1 @@
-"1" > 1; #@! [line 1] runtime error: operands must be numbers
+"1" > 1; #@! operands must be numbers

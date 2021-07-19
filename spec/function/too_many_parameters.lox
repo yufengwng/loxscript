@@ -1,2 +1,0 @@
-# 9 parameters.
-fun f(a, b, c, d, e, f, g, h, i) {} #!! [line 2] parse error at 'i': cannot have more than 8 parameters

@@ -1,1 +1,1 @@
-"s" + none; #@! [line 1] runtime error: operands must be two numbers or two strings
+"s" + none; #@! operands must be two numbers or two strings

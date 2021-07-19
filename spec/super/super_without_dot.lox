@@ -2,10 +2,7 @@ class A {}
 
 class B < A {
   method() {
-    #!! [line 6] parse error at ';': expected '.' after 'super'
+    #!! [line 6] Error at ';': expected '.' after 'super'
     super;
   }
 }
-
-# FIXME
-#!! [line 7] parse error at '}': expected an expression

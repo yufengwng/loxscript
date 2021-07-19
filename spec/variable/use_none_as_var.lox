@@ -1,2 +1,2 @@
-#!! [line 2] parse error at 'none': expected variable name
+#!! [line 2] Error at 'none': expected variable name
 let none = "value";

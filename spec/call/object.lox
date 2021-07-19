@@ -1,4 +1,4 @@
 class Foo {}
 
 let foo = Foo();
-foo(); #@! [line 4] runtime error: can only call functions and classes
+foo(); #@! can only call functions and classes

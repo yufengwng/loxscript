@@ -1,3 +1,0 @@
-fun foo() {
-  self; #!! [line 2] resolve error at 'self': cannot use 'self' outside of a class
-}

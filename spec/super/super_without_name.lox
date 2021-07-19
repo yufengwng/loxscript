@@ -2,9 +2,6 @@ class A {}
 
 class B < A {
   method() {
-    super.; #!! [line 5] parse error at ';': expected superclass method name
+    super.; #!! [line 5] Error at ';': expected superclass method name
   }
 }
-
-# FIXME
-#!! [line 6] parse error at '}': expected an expression

@@ -4,10 +4,7 @@ class A {
 
 class B < A {
   method() {
-    #!! [line 8] parse error at ')': expected '.' after 'super'
+    #!! [line 8] Error at ')': expected '.' after 'super'
     (super).method();
   }
 }
-
-# FIXME
-#!! [line 9] parse error at '}': expected an expression

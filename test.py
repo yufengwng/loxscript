@@ -16,8 +16,8 @@ TEST_DIR = 'spec'
 OUTPUT_EXPECT = re.compile(r'#=> (.*)')
 PARSE_ERROR_EXPECT = re.compile(r'#!! (.+)')
 RUNTIME_ERROR_EXPECT = re.compile(r'#@! (.+)')
-SYNTAX_ERROR_RE = re.compile(r'\[line \d+\] (parse|resolve) error.+')
-STACK_TRACE_RE = re.compile(r'\[line (\d+)\]')
+SYNTAX_ERROR_RE = re.compile(r'\[line \d+\] Error.+')
+STACK_TRACE_RE = re.compile(r'\[line (\d+)\] in')
 
 EX_DATAERR = 65
 EX_SOFTWARE = 70
@@ -64,19 +64,19 @@ class Test:
         for line in self.read_source():
             match = OUTPUT_EXPECT.search(line)
             if match:
-                self.output.append((match.group(1), line_num))
+                self.output.append((match.group(1).strip(), line_num))
                 expectations += 1
 
             match = PARSE_ERROR_EXPECT.search(line)
             if match:
-                self.parse_errors.add(match.group(1))
+                self.parse_errors.add(match.group(1).strip())
                 self.exit_code = EX_DATAERR
                 expectations += 1
 
             match = RUNTIME_ERROR_EXPECT.search(line)
             if match:
                 self.runtime_error_line = line_num
-                self.runtime_error_message = match.group(1)
+                self.runtime_error_message = match.group(1).strip()
                 self.exit_code = EX_SOFTWARE
                 expectations += 1
 
@@ -125,7 +125,12 @@ class Test:
             self.fail('Expected runtime error "{}" but got:', self.runtime_error_message)
             self.fail(line)
 
-        match = STACK_TRACE_RE.search(line)
+        match = None
+        for ln in error_lines:
+            match = STACK_TRACE_RE.search(ln)
+            if match:
+                break
+
         if not match:
             self.fail('Expected stack trace but got none.')
         else:
@@ -139,6 +144,7 @@ class Test:
         found_errors = set()
         num_unexpected = 0
         for line in error_lines:
+            line = line.strip()
             match = SYNTAX_ERROR_RE.search(line)
             if match:
                 if line in self.parse_errors:

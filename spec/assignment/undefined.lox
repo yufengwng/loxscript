@@ -1,1 +1,1 @@
-unknown = "what"; #@! [line 1] runtime error: undefined variable 'unknown'
+unknown = "what"; #@! undefined variable 'unknown'

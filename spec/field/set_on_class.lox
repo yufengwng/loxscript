@@ -1,2 +1,2 @@
 class Foo {}
-Foo.bar = "value"; #@! [line 2] runtime error: only instances have fields
+Foo.bar = "value"; #@! only instances have fields

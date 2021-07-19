@@ -1,4 +1,4 @@
 class Foo {}
 
-#!! [line 4] parse error at '(': expected superclass name
+#!! [line 4] Error at '(': expected superclass name
 class Bar < (Foo) {}

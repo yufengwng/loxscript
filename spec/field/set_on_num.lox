@@ -1,1 +1,1 @@
-123.foo = "value"; #@! [line 1] runtime error: only instances have fields
+123.foo = "value"; #@! only instances have fields

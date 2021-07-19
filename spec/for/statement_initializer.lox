@@ -1,3 +1,4 @@
-#!! [line 3] parse error at '{': expected an expression
-#!! [line 3] parse error at '{': expected ';' after assignment
+#!! [line 4] Error at '{': expected an expression
+#!! [line 4] Error at '{': expected ';' after expression
+#!! [line 4] Error at end: expected '}' after block
 for {}; a < 2; a = a + 1 {}

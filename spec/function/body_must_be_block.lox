@@ -1,2 +1,2 @@
-#!! [line 2] parse error at '123': expected '{' before function body
-fun f() 123;
+fun f() 123; #!! [line 1] Error at '123': expected '{' before function body
+#!! [line 2] Error at end: expected '}' after block

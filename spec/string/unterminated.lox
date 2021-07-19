@@ -1,2 +1,2 @@
-#!! [line 2] parse error: unterminated string
+#!! [line 2] Error: unterminated string
 "this string has no close quote

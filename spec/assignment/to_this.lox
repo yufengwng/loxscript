@@ -1,7 +1,0 @@
-class Foo {
-  Foo() {
-    self = "value"; #!! [line 3] parse error at '=': invalid assignment target
-  }
-}
-
-Foo();
