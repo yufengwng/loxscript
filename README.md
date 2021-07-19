@@ -1,9 +1,10 @@
 ## loxscript
 
 An interpreter written in Rust for the [Lox language][lox], but with different
-syntax and small adjustments. The `tree` module provides a tree-walk
-interpreter that uses a recursive descent parser and very limited static
-analysis.
+syntax and small adjustments. The main implementation uses a stack-based
+bytecode virtual machine with a single-pass compiler. The `tree` module
+provides a tree-walk interpreter that uses a recursive descent parser and very
+limited static analysis.
 
 [lox]: http://www.craftinginterpreters.com/the-lox-language.html
 
@@ -38,7 +39,7 @@ objects
 
 ### errors
 
-parse errors
+compile errors
 * If there are syntax or static analysis issues.
 
 runtime errors

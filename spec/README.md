@@ -7,15 +7,15 @@ Adapted from [craftinginterpreters][ci-tests].
 ### symbols
 
 `#=> `
-* Notes an assertion of output on stdout. There is a space character after the
+* An assertion of output on stdout. There is a space character after the
   symbol. The space is significant and everything after the space is treated as
   the expected output.
 
 `#!! `
-* Notes a lexing or parsing error. Everything after the space is treated as the
-  expected error message.
+* A compile error. Everything after the space is treated as the expected error
+  message.
 
 `#@! `
-* Notes a runtime error. Everything after the space is treated as the expected
-  error message.
+* A runtime error. Everything after the space is treated as the expected error
+  message. Runtime errors will also have stacktrace line number checked.
 
