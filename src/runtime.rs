@@ -254,7 +254,7 @@ impl VM {
                     if let Some(value) = instance.get_field(&name) {
                         self.stack_pop();
                         self.stack_push(value);
-                    } else if !self.bind_method(instance, &name) {
+                    } else if !self.bind_method(&instance.class, &name) {
                         return InterpretResult::RuntimeErr;
                     }
                 }
@@ -349,6 +349,30 @@ impl VM {
                         return InterpretResult::RuntimeErr;
                     }
                 }
+                Inherit => {
+                    if !self.stack_peek(1).is_class() {
+                        runtime_err!(self, "superclass must be a class");
+                        return InterpretResult::RuntimeErr;
+                    }
+                    let superclass = self.stack_peek(1).clone().into_class();
+                    let subclass = self.stack_peek(0).clone().into_class();
+                    subclass.inherit(&superclass);
+                }
+                SuperGet => {
+                    let name = self.frame_mut().read_string();
+                    let superclass = self.stack_pop().into_class();
+                    if !self.bind_method(&superclass, &name) {
+                        return InterpretResult::RuntimeErr;
+                    }
+                }
+                SuperInvoke => {
+                    let name = self.frame_mut().read_string();
+                    let arg_count = self.frame_mut().read_byte() as usize;
+                    let superclass = self.stack_pop().into_class();
+                    if !self.invoke_from_class(&superclass, &name, arg_count) {
+                        return InterpretResult::RuntimeErr;
+                    }
+                }
                 Return => {
                     let value = self.stack_pop();
                     self.frame_pop();
@@ -431,10 +455,10 @@ impl VM {
         class.set_method(name, method);
     }
 
-    fn bind_method(&mut self, instance: Rc<ObjInstance>, name: &str) -> bool {
-        if let Some(method) = instance.class.get_method(name) {
+    fn bind_method(&mut self, class: &Rc<ObjClass>, name: &str) -> bool {
+        if let Some(method) = class.get_method(name) {
+            let instance = self.stack_pop().into_instance();
             let bound = ObjBoundMethod::new(instance, method);
-            self.stack_pop();
             self.stack_push(Value::BoundMethod(bound));
             return true;
         } else {

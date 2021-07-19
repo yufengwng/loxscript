@@ -42,6 +42,9 @@ pub enum OpCode {
     Class,
     Method,
     Invoke,
+    Inherit,
+    SuperGet,
+    SuperInvoke,
     Return,
 }
 
@@ -88,6 +91,9 @@ impl TryFrom<u8> for OpCode {
             b if b == Class as u8 => Class,
             b if b == Method as u8 => Method,
             b if b == Invoke as u8 => Invoke,
+            b if b == Inherit as u8 => Inherit,
+            b if b == SuperGet as u8 => SuperGet,
+            b if b == SuperInvoke as u8 => SuperInvoke,
             b if b == Return as u8 => Return,
             _ => return Err(()),
         })

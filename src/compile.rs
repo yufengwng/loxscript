@@ -206,14 +206,35 @@ impl Compiler {
 
         self.classes.push(ClassCtx::new());
 
-        self.named_variable(name, false);
+        if self.matches(Token::Lt) {
+            self.consume(Token::Ident, "expect superclass name");
+            let superclass_name = self.prev().slice.to_owned();
+            if superclass_name == name {
+                self.error("a class can't inherit from itself");
+            }
+
+            self.named_variable(superclass_name, false);
+            self.named_variable(name.clone(), false);
+            self.emit(OpCode::Inherit);
+
+            self.scope_begin();
+            self.add_local("super".to_owned());
+            self.initialize_local();
+            self.classes.last_mut().unwrap().has_superclass = true;
+        } else {
+            self.named_variable(name.clone(), false);
+        }
+
         self.consume(Token::Lbrace, "expect '{' before class body");
         while !self.check(Token::EOF) && !self.check(Token::Rbrace) {
             self.method();
         }
         self.consume(Token::Rbrace, "expect '}' after class body");
-        self.emit(OpCode::Pop);
 
+        self.emit(OpCode::Pop);
+        if self.classes.last().unwrap().has_superclass {
+            self.scope_end();
+        }
         self.classes.pop();
     }
 
@@ -637,6 +658,32 @@ impl Compiler {
         self.variable(false);
     }
 
+    fn super_(&mut self, _assignable: bool) {
+        if self.classes.is_empty() {
+            self.error("can't use 'super' outside of a class");
+        } else if !self.classes.last().unwrap().has_superclass {
+            self.error("can't use 'super' in a class with no superclass");
+        }
+
+        self.consume(Token::Dot, "expect '.' after 'super'");
+        self.consume(Token::Ident, "expect superclass method name");
+        let name = self.prev().slice.to_owned();
+        let idx = self.make_ident_constant(name);
+
+        self.named_variable("self".to_owned(), false);
+        if self.matches(Token::Lparen) {
+            let arg_count = self.argument_list();
+            self.named_variable("super".to_owned(), false);
+            self.emit(OpCode::SuperInvoke);
+            self.emit_byte(idx as u8);
+            self.emit_byte(arg_count as u8);
+        } else {
+            self.named_variable("super".to_owned(), false);
+            self.emit(OpCode::SuperGet);
+            self.emit_byte(idx as u8);
+        }
+    }
+
     fn variable(&mut self, assignable: bool) {
         let name = self.prev().slice.to_owned();
         self.named_variable(name, assignable);
@@ -925,6 +972,7 @@ impl Compiler {
             Token::True => Compiler::literal,
             Token::False => Compiler::literal,
             Token::Self_ => Compiler::self_,
+            Token::Super => Compiler::super_,
             Token::Ident => Compiler::variable,
             Token::Str => Compiler::string,
             Token::Num => Compiler::number,
@@ -1058,11 +1106,13 @@ impl Context {
     }
 }
 
-struct ClassCtx {}
+struct ClassCtx {
+    has_superclass: bool,
+}
 
 impl ClassCtx {
     fn new() -> Self {
-        Self {}
+        Self { has_superclass: false }
     }
 }
 

@@ -53,6 +53,10 @@ impl Value {
         matches!(self, Self::Str(..))
     }
 
+    pub fn is_class(&self) -> bool {
+        matches!(self, Self::Class(..))
+    }
+
     pub fn is_instance(&self) -> bool {
         matches!(self, Self::Instance(..))
     }
@@ -243,6 +247,13 @@ impl ObjClass {
 
     pub fn set_method(&self, name: String, method: Rc<ObjClosure>) {
         self.methods.borrow_mut().insert(name, method);
+    }
+
+    pub fn inherit(&self, superclass: &Rc<ObjClass>) {
+        let mut methods = self.methods.borrow_mut();
+        for (name, method) in superclass.methods.borrow().iter() {
+            methods.insert(name.clone(), method.clone());
+        }
     }
 }
 

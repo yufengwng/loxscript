@@ -28,17 +28,17 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
     };
 
     return match opcode {
-        Constant => constant_instruction(opcode, chunk, offset),
-        ConstantLong => constant_instruction(opcode, chunk, offset),
-        DefineGlobal => constant_instruction(opcode, chunk, offset),
-        GetGlobal => constant_instruction(opcode, chunk, offset),
-        SetGlobal => constant_instruction(opcode, chunk, offset),
+        Constant => constant_instruction("OP_CONSTANT", chunk, offset),
+        ConstantLong => constant_instruction("OP_CONSTANT_LONG", chunk, offset),
+        DefineGlobal => constant_instruction("OP_DEFINE_GLOBAL", chunk, offset),
+        GetGlobal => constant_instruction("OP_GET_GLOBAL", chunk, offset),
+        SetGlobal => constant_instruction("OP_SET_GLOBAL", chunk, offset),
         GetLocal => byte_instruction("OP_GET_LOCAL", chunk, offset),
         SetLocal => byte_instruction("OP_SET_LOCAL", chunk, offset),
         GetUpvalue => byte_instruction("OP_GET_UPVALUE", chunk, offset),
         SetUpvalue => byte_instruction("OP_SET_UPVALUE", chunk, offset),
-        GetProperty => constant_instruction(opcode, chunk, offset),
-        SetProperty => constant_instruction(opcode, chunk, offset),
+        GetProperty => constant_instruction("OP_GET_PROPERTY", chunk, offset),
+        SetProperty => constant_instruction("OP_SET_PROPERTY", chunk, offset),
         None => simple_instruction("OP_NONE", offset),
         True => simple_instruction("OP_TRUE", offset),
         False => simple_instruction("OP_FALSE", offset),
@@ -62,9 +62,12 @@ pub fn disassemble_at(chunk: &Chunk, offset: usize) -> usize {
         Call => byte_instruction("OP_CALL", chunk, offset),
         Closure => closure_instruction("OP_CLOSURE", chunk, offset),
         CloseUpvalue => simple_instruction("OP_CLOSE_UPVALUE", offset),
-        Class => constant_instruction(opcode, chunk, offset),
-        Method => constant_instruction(opcode, chunk, offset),
+        Class => constant_instruction("OP_CLASS", chunk, offset),
+        Method => constant_instruction("OP_METHOD", chunk, offset),
         Invoke => invoke_instruction("OP_INVOKE", chunk, offset),
+        Inherit => simple_instruction("OP_INHERIT", offset),
+        SuperGet => constant_instruction("OP_SUPER_GET", chunk, offset),
+        SuperInvoke => invoke_instruction("OP_SUPER_INVOKE", chunk, offset),
         Return => simple_instruction("OP_RETURN", offset),
     };
 }
@@ -124,29 +127,15 @@ fn invoke_instruction(name: &str, chunk: &Chunk, offset: usize) -> usize {
     offset + 3
 }
 
-fn constant_instruction(opcode: OpCode, chunk: &Chunk, offset: usize) -> usize {
-    let (name, index, count) = if opcode == OpCode::Class {
-        ("OP_CLASS", chunk.code(offset + 1) as usize, 2)
-    } else if opcode == OpCode::Method {
-        ("OP_METHOD", chunk.code(offset + 1) as usize, 2)
-    } else if opcode == OpCode::Constant {
-        ("OP_CONSTANT", chunk.code(offset + 1) as usize, 2)
-    } else if opcode == OpCode::DefineGlobal {
-        ("OP_DEFINE_GLOBAL", chunk.code(offset + 1) as usize, 2)
-    } else if opcode == OpCode::GetGlobal {
-        ("OP_GET_GLOBAL", chunk.code(offset + 1) as usize, 2)
-    } else if opcode == OpCode::SetGlobal {
-        ("OP_SET_GLOBAL", chunk.code(offset + 1) as usize, 2)
-    } else if opcode == OpCode::GetProperty {
-        ("OP_GET_PROPERTY", chunk.code(offset + 1) as usize, 2)
-    } else if opcode == OpCode::SetProperty {
-        ("OP_SET_PROPERTY", chunk.code(offset + 1) as usize, 2)
-    } else {
+fn constant_instruction(name: &str, chunk: &Chunk, offset: usize) -> usize {
+    let (index, count) = if name == "OP_CONSTANT_LONG" {
         let byte1 = chunk.code(offset + 1) as usize;
         let byte2 = chunk.code(offset + 2) as usize;
         let byte3 = chunk.code(offset + 3) as usize;
         let idx = (byte3 << 16) | (byte2 << 8) | byte1;
-        ("OP_CONSTANT_LONG", idx as usize, 4)
+        (idx as usize, 4)
+    } else {
+        (chunk.code(offset + 1) as usize, 2)
     };
     print!("{:<16} {:4} '", name, index);
     chunk.constant(index).print();
